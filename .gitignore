@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+/vendor/
+/storage/
+*.log
+*.sql.gz
+*.dump
+*.bak
+.DS_Store
+.idea/
+.vscode/
+node_modules/

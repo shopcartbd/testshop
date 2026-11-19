@@ -1,0 +1,16 @@
+{
+  "name": "allstore/marketplace",
+  "description": "A secure PHP storefront for a configurable marketplace",
+  "type": "project",
+  "license": "proprietary",
+  "require": {
+    "php": "^8.4",
+    "ext-pdo": "*",
+    "ext-pdo_pgsql": "*",
+    "ext-json": "*"
+  },
+  "config": {
+    "sort-packages": true,
+    "optimize-autoloader": true
+  }
+}

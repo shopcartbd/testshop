@@ -1,0 +1,7 @@
+# Supabase database setup
+
+Create a Supabase project and apply `database/migrations/001_initial_schema.sql` first. The migration uses Supabase Auth's `auth.users`, creates tables under the `app` schema, and enables RLS for selected customer-owned records. Then optionally apply `database/seed.sql` to add two starter categories. No product data is seeded, so products shown in the shop are always read from the database.
+
+This application connects using PDO/PostgreSQL from the PHP server. Direct database sessions do not automatically inherit an authenticated browser user's Supabase JWT or API RLS context. Create a dedicated database role and grant only the SQL operations the PHP application actually needs; the current implemented storefront only needs `SELECT` on `app.categories`, `app.products`, `app.brands`, and `app.product_images`. Do not use `postgres`/superuser for routine runtime queries. For future customer writes, add reviewed authorization rules and transactions before granting any additional privileges.
+
+Place the connection URI in Vercel's server-side `SUPABASE_DB_URL` setting. The value includes a password, so never add it to source code or a client bundle. The schema migration and seed should be reviewed on a development Supabase project before production.
