@@ -1,0 +1,1 @@
+<section class="page-intro shell"><span class="eyebrow">REQUEST COULD NOT BE COMPLETED</span><h1><?= http_response_code()===403?'এই কাজের অনুমতি নেই।':'সাময়িক সমস্যা হয়েছে।' ?></h1><p><?= e($data['safe_error']??'সার্ভার অনুরোধটি সম্পন্ন করতে পারেনি।') ?></p><a class="button button-green" href="/">হোমে ফিরে যান</a></section>

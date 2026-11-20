@@ -1,20 +1,21 @@
-# Initial verification report
+# Test and verification report
 
-## Completed checks
+**Status: source-level checks passed; no end-to-end or production test suite has run.** No production/customer records were read or written. All network-facing business integrations remain unverified.
 
-- PHP syntax: all 18 application and view PHP files passed `php -l` using PHP 8.3.6. The deployment container targets PHP 8.4.
-- Composer metadata and generated lockfile: `composer validate --no-check-publish` passed.
-- PostgreSQL syntax: `pglast` parsed the initial schema (77 statements) and seed script (1 statement).
-- Local PHP HTTP smoke test: `GET /health`, `/`, `/shop`, `/cart`, `/checkout`, `/about`, `/contact`, `/faq`, `/privacy`, and `/returns` returned 200. An unknown route returned 404.
-- Static assets: CSS, JavaScript, logo PNG, and three JPEG assets all returned 200 with expected content types.
-- CSRF check: a cart update POST without a token was rejected with HTTP 419.
-- Secret-pattern scan: no obvious credential-like strings were found in project files.
-- The local environment did not have Docker, so the FrankenPHP container image was not built or exercised.
+## Checks run in the sandbox
 
-## Not verified
+- `php -l` across every repository PHP file (42 files) — passed on CLI PHP 8.3.6. Production image targets PHP 8.4.
+- `composer validate --strict` — passed. `node --check public/assets/store.js` — passed.
+- `pglast.parse_sql` — syntax-parsed migration 001 (77 statements), migration 002 (121 statements), and `database/seed.sql` (3 statements). This is only a parser check; PostgreSQL did not execute any statements.
+- Safe local PHP-server smoke requests with no database credentials configured: `GET /health` returned 200; `GET /login` rendered 200; `GET /api/v1/csrf` returned 200 with a CSRF token; `GET /` returned a generic 500 because the catalog requires the unconfigured database. The homepage response did not expose PHP stack-trace/SQL details. These are render/error-handling checks, not authentication or storefront acceptance tests.
+- A heuristic source scan found no obvious private-key/payment-key or hardcoded-password patterns. This is not a comprehensive Git-history secret scanner.
 
-No Supabase credentials were supplied. The migration has not been applied to a live Supabase project, and live catalog search/cart queries, database grants, Storage access, and seeded categories have not been tested. The local storefront rendered its empty-catalog/database-not-configured state.
+## Not run / blocked
 
-No Vercel account/project or authenticated Vercel CLI is available in this session. No deployment was made, and no production URL is claimed. Production HTTPS, Vercel logs, runtime behavior, database access, and deployment cache settings remain unverified.
+- Supabase: migration execution/compatibility, runtime grants and RLS policies, PDO connection, owner bootstrap, auth/ownership, transaction/stock/coupon/session behavior.
+- Functional: register/login/logout/reset, live browse/search/filter/sort, variants, cart mutations, wishlist, coupon/checkout/order creation, tracking, reviews, returns/support, admin CRUD/stock/order/banner/customer/report paths.
+- Security: SQL injection, XSS, CSRF, unauthorized admin access, broken access control/IDOR, session fixation, rate limits, upload/path traversal, secret exposure, manipulated totals, unauthorized orders, stock races and duplicate submissions.
+- UI/accessibility: desktop/tablet/mobile visual review, keyboard/focus/contrast/screen reader behavior, dialogs, forms, empty/error/loading states and WCAG 2.2 AA.
+- Deployment: Docker image build (Docker unavailable), Vercel build/deployment, runtime/database network, environment validation, HTTPS, static assets/API routes, Storage, SMTP and production logs.
 
-Checkout/order creation, payments, user/admin authentication, password reset, admin CMS, uploads, email, shipping, return workflows, and analytics are not implemented or tested. Do not use the current source as a production order-taking system until these functions and the remaining security controls have been built and reviewed.
+See `TODO.md` for launch prerequisites and incomplete features. Run all data and security tests only in a separate staging environment. Do not infer Vercel/Supabase success from code checks or Git push.

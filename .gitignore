@@ -11,3 +11,15 @@
 .idea/
 .vscode/
 node_modules/
+
+# Local/debug artifacts and private uploads
+*.tmp
+*.temp
+*.swp
+*.swo
+*.orig
+*.old
+.cache/
+backups/
+private_uploads/
+storage/logs/

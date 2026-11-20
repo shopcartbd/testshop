@@ -1,21 +1,22 @@
-# Deployment
+# Deployment guide
 
-## Runtime choice
+## Current deployment status
 
-Vercel's official Functions runtime documentation lists Node.js, Bun, Python, Rust, Go, Ruby, Wasm, Edge, and Container, but not a native PHP Function runtime. The supported path for this PHP app is a root Dockerfile using the Vercel Container runtime. Vercel's current PHP-on-Vercel guide demonstrates PHP 8.4 with FrankenPHP and Docker. This repository includes `Dockerfile`, `Caddyfile`, and a `/health` route.
+The repository has a root `Dockerfile` and `Caddyfile` for a PHP 8.4 FrankenPHP container. Vercel's Container Runtime is documented as beta. The project's current Vercel linkage, environment values, image build, production URL and deployment status are unknown from this environment. A push to the connected `main` branch may start a Vercel deployment; check Vercel's Deployments page and deployment logs to verify it. Git push success alone is not deployment success.
 
-Official references: [Vercel runtime catalog](https://vercel.com/docs/functions/runtimes) and [Deploy PHP on Vercel with Docker](https://vercel.com/kb/guide/deploy-php-on-vercel-with-docker).
+See [docs/VERCEL_RUNTIME_NOTES.md](VERCEL_RUNTIME_NOTES.md) for the reviewed official documentation and its source links. This single root-Dockerfile setup is documented without a `vercel.json`.
 
-## Connect and configure
+## Before connecting production
 
-1. Push the repository to GitHub, then open the Vercel dashboard and select **New Project**.
-2. Import `shopcartbd/testshop`. The project root is the repository root; the root `Dockerfile` should be selected by Vercel's Container preset.
-3. Add the variables described in `ENVIRONMENT_VARIABLES.md` to server environments. Configure the Supabase database host, password, and least-privilege login only in Vercel's server-side environment settings.
-4. Deploy a preview first. Verify `/health`, the home page, `/shop`, and the static logo/CSS paths. Confirm the application can connect to the intended database before changing the production branch or custom domain.
-5. Once preview verification passes, use Vercel's production deployment controls. The production URL and deployment status must be copied from Vercel; they must not be guessed.
+1. Validate migrations 001 then 002 and the optional seed on a separate Supabase staging project.
+2. Create `allstore_app` as a non-superuser; grant required schema/table/sequence access and apply the four PHP runtime RLS policies in [the setup guide](SUPABASE_VERCEL_SETUP.md). Do not use the anon key as a database login or expose the runtime password.
+3. In Vercel, set the required server-side variables in [docs/ENVIRONMENT_VARIABLES.md](ENVIRONMENT_VARIABLES.md). Set `SESSION_DRIVER=database`; ensure a direct or Supabase Session pooler connection supports the session advisory-lock behavior and can serve the expected connection volume.
+4. Confirm Vercel builds the root Dockerfile, runtime PHP extensions/dependencies are available, it binds to the supplied `PORT`, and `GET /health` returns 2xx without connecting to the database.
+5. Run `php scripts/bootstrap-admin.php` from a trusted environment pointed at the staging DB; verify owner login and least-privilege roles.
+6. Set real shipping prices/regions and publish accurate delivery/return/privacy terms before launch.
+7. Test customer/admin flows with non-production data. Configure/test SMTP or Storage only if needed. Check HTTPS, static images, cache behavior, logs and errors.
+8. Only after staging acceptance, repeat on production using the store's backup/change process.
 
-Vercel's Git integration can create preview deployments on pushes and deploy the configured production branch. Actual automatic deployment is contingent on connecting the repository to the user's Vercel account. This task has no authenticated Vercel CLI/project, so no live deployment has been made or verified.
+## External services and limits
 
-## Container notes
-
-The container listens on `PORT` (default 80) using FrankenPHP/Caddy. Vercel handles public HTTPS. The filesystem is treated as ephemeral; durable catalog and order data belongs in PostgreSQL/Supabase Storage, not container disk. Private pages/API responses should never be shared-cacheable. The current storefront does not yet provide authenticated customer/admin pages, but future private responses must use `Cache-Control: private, no-store`.
+Required: a Supabase PostgreSQL project and server-side connection credentials. Optional: authenticated SMTP and Supabase Storage. Online payments, payment webhooks, actual courier APIs, Vercel deployment credentials/project access and production monitoring are not configured. COD is the only checkout payment choice. No build, live migration, Vercel deployment or production route check has been verified here.
