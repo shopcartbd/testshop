@@ -69,7 +69,7 @@ if ($method === 'POST') {
             $quantity = filter_var($_POST['quantity'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 20]]);
             if (!preg_match('/^[a-f0-9-]{36}$/i', $id) || $quantity === false) throw new InvalidArgumentException('পণ্যের তথ্য সঠিক নয়।');
             $product = Catalog::productById($id);
-            if (!$product || (int) $product['stock_quantity'] < 1) throw new DomainException('এই পণ্যটি এখন মজুতে নেই।');
+            if (!$product || (int) $product['stock_quantity'] < 1) throw new DomainException('এই পণ্যটি এখন মজুতে নেই।.');
             if (($product['product_type'] ?? 'simple') !== 'simple') throw new DomainException('এই product-এর variant/bundle checkout এখনো enabled নয়।');
             $_SESSION['cart'][$id] = min((int) ($_SESSION['cart'][$id] ?? 0) + (int) $quantity, min(20, (int) $product['stock_quantity']));
             $_SESSION['flash'] = 'পণ্যটি কার্টে যোগ হয়েছে।';
