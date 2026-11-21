@@ -25,7 +25,7 @@ final class AccountServices
             'is_default' => isset($input['is_default']),
         ];
         foreach (['recipient_name' => 160,'phone' => 32,'line1' => 240,'line2' => 240,'locality' => 120,'region' => 120,'postal_code' => 32] as $key => $max) {
-            if (mb_strlen($fields[$key]) > $max || (in_array($key, ['recipient_name','phone','line1','locality'], true) && mb_strlen($fields[$key]) < 2)) throw new InvalidArgumentException('ঠিকানার তথ্য যাচাই করে আবার দিন।');
+            if (mb_strlen($fields[$key]) > $max || (in_array($key, ['recipient_name','phone','line1','locality'], true) && mb_strlen($fields[$key]) < 2)) throw new InvalidArgumentException('ঠিকানার তথ্য যাচাই করে আবার দিন..');
         }
         if (!preg_match('/^[A-Z]{2}$/', $fields['country_code'])) throw new InvalidArgumentException('দেশের কোড সঠিক নয়।');
         $db = Database::connection();
