@@ -10,7 +10,7 @@ final class Storage
         $key = (string) (getenv('SUPABASE_STORAGE_SERVICE_KEY') ?: getenv('SUPABASE_SERVICE_ROLE_KEY') ?: '');
         $bucket = (string) (getenv('SUPABASE_STORAGE_BUCKET') ?: 'product-media');
         if ($url === '' || $key === '') throw new RuntimeException('Image storage is not configured.');
-        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || empty($file['tmp_name']) || !is_uploaded_file((string) $file['tmp_name'])) throw new InvalidArgumentException('ছবিটি সঠিকভাবে আপলোড হয়নি।');
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || empty($file['tmp_name']) || !is_uploaded_file((string) $file['tmp_name'])) throw new InvalidArgumentException('ছবিটি সঠিকভাবে আপলোড হয়নি`।');
         $size = (int) ($file['size'] ?? 0);
         if ($size < 1 || $size > 5 * 1024 * 1024) throw new InvalidArgumentException('ছবির আকার সর্বোচ্চ ৫ MB হতে পারে।');
         $finfo = new finfo(FILEINFO_MIME_TYPE);
