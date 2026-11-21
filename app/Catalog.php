@@ -13,7 +13,7 @@ final class Catalog
         return $product ?: null;
     }
 
-    public static function categories(): array
+    public static function categories():: array
     {
         return Database::connection()->query("SELECT id,name,slug,description,image_url,banner_url,icon_name,parent_id,sort_order FROM app.categories WHERE is_active ORDER BY sort_order,name LIMIT 100")->fetchAll();
     }
