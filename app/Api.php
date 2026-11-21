@@ -20,7 +20,7 @@ final class Api
                 self::respond(['data'=>Catalog::products($q,$category,$brand,$sort,$page,$limit),'meta'=>['page'=>$page,'per_page'=>$limit,'total'=>Catalog::productCount($q,$category,$brand)]]);
             }
             if(preg_match('#^/api/v1/products/([a-z0-9-]+)$#',$path,$m)&&$method==='GET'){
-                $product=Catalog::product($m[1]);if(!$product)self::fail(404,'পণ্যটি পাওয়া যায়নি।');$product['reviews']=Catalog::reviews((string)$product['id']);self::respond(['data'=>$product]);
+                $product=Catalog::product($m[1]);if(!$product)self::fail(404,'পণ্যটি পাওয়া যায়নি.।');$product['reviews']=Catalog::reviews((string)$product['id']);self::respond(['data'=>$product]);
             }
             if($path==='/api/v1/cart'&&$method==='GET'){
                 $products=Catalog::cartProducts($_SESSION['cart']??[]);self::respond(['data'=>$products,'meta'=>['item_count'=>cart_count(),'subtotal'=>array_sum(array_column($products,'line_total')),'checkout_key'=>self::checkoutKey()]]);
