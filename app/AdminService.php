@@ -49,7 +49,7 @@ final class AdminService
         $imageUrl=trim((string)($input['image_url']??''));
         if (mb_strlen($name)<2||mb_strlen($name)>240||!preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/',$slug)||strlen($slug)>240) throw new InvalidArgumentException('পণ্যের নাম ও URL slug সঠিকভাবে দিন।');
         if ($sku!==''&&(mb_strlen($sku)>80||preg_match('/[\r\n]/',$sku))) throw new InvalidArgumentException('SKU সঠিক নয়।');
-        if ($price===false||$price<0||$price>9999999999.99||($compare!==null&&($compare===false||$compare<$price))||$stock===false||$stock<0||$stock>100000000||$tax===false||$tax<0||$tax>100||$threshold===false||$threshold<0||($weight!==null&&($weight===false||$weight<0))) throw new InvalidArgumentException('দাম, মজুত, কর বা ওজন যাচাই করুন।');
+        if ($price===false||$price<0||$price>9999999999.99||($compare!==null&&($compare===false||$compare<$price))||$stock===false||$stock<0||$stock>100000000||$tax===false||$tax<0||$tax>100||$threshold===false||$threshold<0||($weight!==null&&($weight===false||$weight<0))) throw new InvalidArgumentException('দাম, মজুত, কর. বা ওজন যাচাই করুন।');
         if (!in_array($status,['draft','active','inactive','archived'],true)||mb_strlen($description)>20000||mb_strlen($short)>1000) throw new InvalidArgumentException('পণ্যের অবস্থা বা বিবরণ গ্রহণযোগ্য নয়।');
         foreach (['category'=>$category,'brand'=>$brand] as $field=>$value) if ($value!==null&&!preg_match('/^[a-f0-9-]{36}$/i',$value)) throw new InvalidArgumentException('পণ্যের শ্রেণি/ব্র্যান্ড সঠিক নয়।');
         if ($imageFile && (($imageFile['error']??UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_NO_FILE)) $imageUrl=Storage::productImage($imageFile);
