@@ -18,6 +18,7 @@ $dbOwner = null;
 $canCreate = null;
 $canUsage = null;
 $publicTables = null;
+$dbSuper = null;
 try {
     Database::pdo();
     $connected = (bool)Database::value('SELECT 1');
@@ -26,9 +27,10 @@ try {
             $schema = (int)Database::value("SELECT CASE WHEN to_regclass('public.sessions') IS NOT NULL THEN 1 ELSE 0 END") === 1;
             $dbUser = (string)Database::value('SELECT current_user');
             $dbOwner = (string)Database::value("SELECT pg_get_userbyid(nspowner) FROM pg_namespace WHERE nspname='public'");
-            $canCreate = (int)Database::value("SELECT CASE WHEN has_schema_privilege(current_user(), 'public', 'CREATE') THEN 1 ELSE 0 END") === 1;
-            $canUsage = (int)Database::value("SELECT CASE WHEN has_schema_privilege(current_user(), 'public', 'USAGE') THEN 1 ELSE 0 END") === 1;
+            $canCreate = (int)Database::value("SELECT CASE WHEN has_schema_privilege(current_user, 'public', 'CREATE') THEN 1 ELSE 0 END") === 1;
+            $canUsage = (int)Database::value("SELECT CASE WHEN has_schema_privilege(current_user, 'public', 'USAGE') THEN 1 ELSE 0 END") === 1;
             $publicTables = (int)Database::value("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'");
+            $dbSuper = (int)Database::value("SELECT CASE WHEN rolsuper THEN 1 ELSE 0 END FROM pg_roles WHERE rolname = current_user") === 1;
         } else {
             $schema = (bool)Database::value("SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'");
             $publicTables = (int)Database::value("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
@@ -78,6 +80,7 @@ $data = [
         'db_can_create_public' => $canCreate,
         'db_can_usage_public' => $canUsage,
         'db_public_tables' => $publicTables,
+        'db_role_superuser' => $dbSuper,
         'supabase_url_present' => (string)Config::get('supabase.url') !== '',
         'supabase_secret_present' => (string)Config::get('supabase.secret') !== '',
     ],

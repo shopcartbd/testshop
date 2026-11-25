@@ -64,10 +64,13 @@ $check(str_contains($logger, "Config::get('app.env') === 'production'") && str_c
 $check(str_contains($request, "explode(',', \$proto)") && str_contains($request, 'HTTP_FORWARDED'), 'Forwarded-proto chains and RFC 7239 Forwarded are handled');
 $check(str_contains($config, 'SUPABASE_DB_URL') && str_contains($config, 'POSTGRES_URL'), 'Config accepts Supabase/Vercel DSN aliases');
 $check(str_contains($config, 'VERCEL_ENV') && str_contains($config, 'VERCEL_URL'), 'Config accepts Vercel env/url fallbacks');
+$check(str_contains($config, 'overrideDatabaseUrl') && str_contains($config, 'withDatabaseUser'), 'Config supports a transient setup-only DSN role override');
+$check(str_contains($database, 'function reset'), 'Database supports dropping its cached PDO connection for setup');
 $check(str_contains($config, 'supabaseUrl') && str_contains($config, 'supabase.co'), 'Supabase project URL can be derived from a DB URI');
 $check(str_contains($bootstrap, "/api/health") && str_contains($bootstrap, '$isHealthCheck'), 'Health check bypasses DB-backed session bootstrap');
 $check(str_contains($health, 'schema_ready') && str_contains($health, 'database_connected') && str_contains($health, 'db_source'), 'Health endpoint reports sanitized DB/schema diagnostics');
 $check(str_contains($health, 'db_can_create_public') && str_contains($health, 'db_public_schema_owner') && str_contains($health, 'db_public_tables'), 'Health endpoint reports sanitized PostgreSQL privilege diagnostics');
+$check(!str_contains($health, 'current_user()'), 'Health uses the PostgreSQL current_user keyword, not invalid function syntax');
 $check(!str_contains($health, 'Config::all()') && !str_contains($health, 'password'), 'Health endpoint does not echo environment values');
 $check(is_file($root . '/scripts/vercel_preflight.php'), 'Vercel preflight script is present');
 $check(is_file($root . '/vercel.vercel-php.example.json'), 'Archived community-runtime fallback is kept separate');

@@ -15,6 +15,13 @@ final class Database
     private static ?PDO $pdo = null;
     private static int $txDepth = 0;
 
+    /** Drop the cached connection so a setup-only DSN override can be applied. */
+    public static function reset(): void
+    {
+        self::$pdo = null;
+        self::$txDepth = 0;
+    }
+
     public static function pdo(): PDO
     {
         if (self::$pdo instanceof PDO) { return self::$pdo; }
