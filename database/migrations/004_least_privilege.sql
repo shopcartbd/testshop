@@ -18,7 +18,8 @@ GRANT SELECT, INSERT, UPDATE ON TABLE profiles TO allstore_app;
 REVOKE ALL ON TABLE audit_logs FROM allstore_app;
 GRANT SELECT, INSERT ON TABLE audit_logs TO allstore_app;
 REVOKE ALL ON TABLE settings FROM allstore_app;
-GRANT SELECT, UPDATE ON TABLE settings TO allstore_app;
+-- Seeding inserts the initial settings rows through the runtime role.
+GRANT SELECT, INSERT, UPDATE ON TABLE settings TO allstore_app;
 -- Public catalogue can be modified by admins through PHP only; the app role
 -- still needs DML for the admin panel, which is guarded by Auth::can().
 -- Verification queries:

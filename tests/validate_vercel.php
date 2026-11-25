@@ -28,6 +28,7 @@ $request = $read('src/Core/Request.php');
 $config = $read('src/Core/Config.php');
 $bootstrap = $read('includes/bootstrap.php');
 $health = $read('api/handlers/health.php');
+$leastPrivilege = $read('database/migrations/004_least_privilege.sql');
 
 // Container image / build shape.
 $check($docker !== '' && $dockerVercel !== '', 'Dockerfile + Dockerfile.vercel exist');
@@ -71,6 +72,8 @@ $check(str_contains($bootstrap, "/api/health") && str_contains($bootstrap, '$isH
 $check(str_contains($health, 'schema_ready') && str_contains($health, 'database_connected') && str_contains($health, 'db_source'), 'Health endpoint reports sanitized DB/schema diagnostics');
 $check(str_contains($health, 'db_can_create_public') && str_contains($health, 'db_public_schema_owner') && str_contains($health, 'db_public_tables'), 'Health endpoint reports sanitized PostgreSQL privilege diagnostics');
 $check(!str_contains($health, 'current_user()'), 'Health uses the PostgreSQL current_user keyword, not invalid function syntax');
+$check(str_contains($health, 'session_write_test') && str_contains($health, 'db_sessions_insert') && str_contains($health, 'db_settings_insert'), 'Health endpoint reproduces session writes and reports table-level grants');
+$check(str_contains($leastPrivilege, 'GRANT SELECT, INSERT, UPDATE ON TABLE settings TO allstore_app'), 'Least-privilege role allows the seeder to insert initial settings');
 $check(!str_contains($health, 'Config::all()') && !str_contains($health, 'password'), 'Health endpoint does not echo environment values');
 $check(is_file($root . '/scripts/vercel_preflight.php'), 'Vercel preflight script is present');
 $check(is_file($root . '/vercel.vercel-php.example.json'), 'Archived community-runtime fallback is kept separate');
