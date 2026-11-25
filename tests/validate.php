@@ -4,8 +4,10 @@ declare(strict_types=1);
  * Static project validation: syntax-level references, route maps, and handler
  * method calls. Runtime behaviour is covered separately by tests/smoke.py.
  * Usage: php tests/validate.php
+ *
+ * Static-only: uses tests/static_bootstrap.php, so no .env or database is needed.
  */
-require_once __DIR__ . '/../includes/bootstrap.php';
+require_once __DIR__ . '/static_bootstrap.php';
 
 use AllStore\Core\ApiRoutes;
 use AllStore\Core\Router;

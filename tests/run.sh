@@ -2,7 +2,7 @@
 # AllStore local verification wrapper.
 # Usage:
 #   bash tests/run.sh                 # static checks + HTTP smoke test if server is up
-#   SKIP_SMOKE=1 bash tests/run.sh    # static checks only
+#   SKIP_SMOKE=1 bash tests/run.sh    # static checks only (no .env/DB required)
 #   BASE_URL=http://host:port bash tests/run.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."

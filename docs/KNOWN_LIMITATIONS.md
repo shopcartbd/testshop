@@ -5,7 +5,7 @@ This file separates **implemented and locally verified** work from work that nee
 ## Credentials / accounts not available here
 
 - No Supabase project URL, DB password, Storage credentials, or API keys were provided. Live PostgreSQL connectivity, RLS enforcement, Storage upload/download, and least-privilege role behaviour are unverified.
-- No Vercel account/project or GitHub repository/token was connected. No repository push, Vercel deployment, or production URL exists.
+- Arena's GitHub connector was unavailable, but a user-supplied classic `ghp_` PAT was used once to push the filtered source to `shopcartbd/testshop` on `main`. Because that token appeared in chat, it must be revoked immediately. No Vercel account/project was connected; no Vercel deployment or production URL exists.
 - No Stripe secret/webhook secret or SMTP provider credentials were provided. Stripe Checkout, live webhook HMAC verification, and email delivery are code-complete but inactive until configured.
 - No external courier, SMS, push, analytics or search-provider credentials are wired in. Shipping, search and notifications use the local database.
 
@@ -43,5 +43,6 @@ This file separates **implemented and locally verified** work from work that nee
 ## Local-preview specifics
 
 - The local preview uses a development-only `.env`, a generated local admin password at `/home/user/allstore-local-admin.txt`, and a SQLite database containing smoke-test fixtures. These are intentionally excluded from `/home/user/allstore.zip`.
+- Static checks (`SKIP_SMOKE=1 bash tests/run.sh`) now pass on a fresh clone without `.env`/SQLite because the validators use `tests/static_bootstrap.php`. Runtime pages and the HTTP smoke test still require a configured database.
 - Re-running `tests/smoke.py` repeatedly can hit the application's intentional rate limits; use a fresh local database or wait for the configured windows. Do not run it against production.
 - `scripts/bootstrap_admin.php` is one-time and refuses to run after `bootstrap_completed=1` or when an admin already exists.
