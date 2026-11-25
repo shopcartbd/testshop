@@ -67,6 +67,7 @@ $check(str_contains($config, 'VERCEL_ENV') && str_contains($config, 'VERCEL_URL'
 $check(str_contains($config, 'supabaseUrl') && str_contains($config, 'supabase.co'), 'Supabase project URL can be derived from a DB URI');
 $check(str_contains($bootstrap, "/api/health") && str_contains($bootstrap, '$isHealthCheck'), 'Health check bypasses DB-backed session bootstrap');
 $check(str_contains($health, 'schema_ready') && str_contains($health, 'database_connected') && str_contains($health, 'db_source'), 'Health endpoint reports sanitized DB/schema diagnostics');
+$check(str_contains($health, 'db_can_create_public') && str_contains($health, 'db_public_schema_owner') && str_contains($health, 'db_public_tables'), 'Health endpoint reports sanitized PostgreSQL privilege diagnostics');
 $check(!str_contains($health, 'Config::all()') && !str_contains($health, 'password'), 'Health endpoint does not echo environment values');
 $check(is_file($root . '/scripts/vercel_preflight.php'), 'Vercel preflight script is present');
 $check(is_file($root . '/vercel.vercel-php.example.json'), 'Archived community-runtime fallback is kept separate');
