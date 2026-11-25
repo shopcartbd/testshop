@@ -91,4 +91,6 @@ No `SHIPPING_API_KEY` is required because shipping rates are computed from the l
 - Supabase migrations applied in order; Storage buckets and private-document policies configured.
 - SMTP/Stripe/Storage secrets set only in Vercel project settings/secret manager.
 - `.env`, SQLite files, generated logs, uploads and local admin credential files excluded from Git/container/ZIP.
+- Do **not** set `PORT` manually in Vercel settings; the platform injects it and `Caddyfile` defaults to `80`.
+- Run `php scripts/vercel_preflight.php` with production-shaped env before deploying; see `VERCEL_READINESS.md`.
 - `/api/health`, `/`, `/admin/login`, CSP/HSTS headers and one authenticated admin page checked after deployment.

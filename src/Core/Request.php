@@ -18,8 +18,14 @@ final class Request
     public static function ua(): string { return mb_substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 250); }
     public static function isHttps(): bool
     {
-        return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-            || strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
+        if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') { return true; }
+        if (strtolower((string)($_SERVER['REQUEST_SCHEME'] ?? '')) === 'https') { return true; }
+        // Vercel/proxies may send a comma-separated chain, e.g. "https,http".
+        // Trust only the first (client-facing) value.
+        $proto = (string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '');
+        if ($proto !== '' && strtolower(trim(explode(',', $proto)[0])) === 'https') { return true; }
+        $forwarded = (string)($_SERVER['HTTP_FORWARDED'] ?? '');
+        return $forwarded !== '' && preg_match('/(?:^|[;,\s])proto=https(?:\s|;|$)/i', $forwarded) === 1;
     }
     private static function body(): array
     {

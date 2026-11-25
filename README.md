@@ -13,7 +13,7 @@
 - **Data:** portable PostgreSQL 15+/SQLite schema with 58 tables, Supabase RLS/Storage/least-privilege migrations, idempotent local seed, DB-backed sessions/rate limits/audit/idempotency.
 - **Frontend:** four CSS files, three dependency-free JavaScript files, local generated imagery and SVG favicon; no external fonts, CDNs or tracking scripts.
 - **Ops:** `Dockerfile`, `Dockerfile.vercel`, `Caddyfile`, `vercel.json`, `.dockerignore`, `.env.example`, one-time admin bootstrap and validation/smoke tests.
-- **Docs:** `docs/` contains environment, API, admin, deployment, security, architecture, test report and limitations.
+- **Docs:** `docs/` contains environment, API, admin, deployment, Vercel readiness, security, architecture, test report and limitations.
 
 ## Quick start (local)
 
@@ -53,7 +53,7 @@ python3 tests/smoke.py                    # requires the server to be running
 
 ## Deployment shape
 
-The primary deployment path is the official Vercel PHP-on-Docker/Container Runtime approach: root `Dockerfile` with FrankenPHP, `Caddyfile` listening on `$PORT`, PostgreSQL through Supabase's transaction pooler, and environment variables from Vercel project settings. No framework-specific `vercel.json` functions config is needed. `vercel.vercel-php.example.json` is kept only as a documented, unsupported community-runtime fallback. See `docs/DEPLOYMENT_GUIDE.md`.
+The primary deployment path is the official Vercel PHP-on-Docker/Container Runtime approach: root `Dockerfile` with FrankenPHP, `Caddyfile` listening on `$PORT`, PostgreSQL through Supabase's transaction pooler, and environment variables from Vercel project settings. No framework-specific `vercel.json` functions config is needed. `vercel.vercel-php.example.json` is kept only as a documented, unsupported community-runtime fallback. Run `php scripts/vercel_preflight.php` before deploying. See `docs/DEPLOYMENT_GUIDE.md` and `docs/VERCEL_READINESS.md`.
 
 ## Documentation index
 
@@ -63,6 +63,7 @@ The primary deployment path is the official Vercel PHP-on-Docker/Container Runti
 | `docs/API_DOCUMENTATION.md` | JSON envelope, CSRF/auth rules and all 44 endpoint patterns |
 | `docs/ADMIN_SETUP.md` | One-time administrator bootstrap and RBAC notes |
 | `docs/DEPLOYMENT_GUIDE.md` | Supabase + Vercel Container Runtime deployment |
+| `docs/VERCEL_READINESS.md` | Vercel audit findings, fixes, preflight and remaining manual steps |
 | `docs/SECURITY.md` | Threat model and implemented controls |
 | `docs/ARCHITECTURE.md` | Request lifecycle, directories, data and services |
 | `docs/TEST_REPORT.md` | Exact tests executed and results |

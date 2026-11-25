@@ -1,12 +1,13 @@
 # AllStore — Vercel Container Runtime / generic OCI deployment.
 # Official Vercel KB: root Dockerfile + FrankenPHP + Caddy listening on $PORT.
-FROM dunglas/frankenphp:1-php8.4-alpine
+# Pinned, patched FrankenPHP 1.14 / PHP 8.4 Debian image for reproducible builds.
+FROM dunglas/frankenphp:1.14.0-php8.4-trixie
 
 WORKDIR /app
 
 # Production PHP settings and the exact extensions used by the application.
 RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
- && install-php-extensions pdo_pgsql pgsql pdo_sqlite sqlite3 mbstring intl gd zip opcache \
+ && install-php-extensions pdo_pgsql pgsql pdo_sqlite sqlite3 curl mbstring intl gd zip opcache \
  && { \
       echo 'expose_php=Off'; \
       echo 'display_errors=Off'; \

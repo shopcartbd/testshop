@@ -33,7 +33,10 @@ final class Database
             $opts[PDO::ATTR_EMULATE_PREPARES] = ($c['pool_mode'] === 'transaction');
             $opts[PDO::ATTR_PERSISTENT] = false;
             self::$pdo = new PDO($c['dsn'], $c['user'], $c['password'], $opts);
-            self::$pdo->exec("SET NAMES 'UTF8'");
+            // Do not issue session-level SET/RESET here: Supabase's transaction
+            // pooler (port 6543) discards session state between transactions.
+            // The connection is already UTF-8; client encoding belongs in the
+            // DSN/options if a deployment ever needs to override it.
         } else {
             $opts[PDO::ATTR_EMULATE_PREPARES] = false;
             self::$pdo = new PDO($c['dsn'], null, null, $opts);

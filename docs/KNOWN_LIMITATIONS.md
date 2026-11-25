@@ -11,17 +11,18 @@ This file separates **implemented and locally verified** work from work that nee
 
 ## Container/deployment validation still required
 
-- `Dockerfile`, `Dockerfile.vercel` and `Caddyfile` follow the official Vercel PHP-on-Docker/FrankenPHP guidance, but Docker/Caddy/FrankenPHP binaries were unavailable in this sandbox. The image was not built and `vercel dev --local` was not run.
-- `Caddyfile` syntax, `php_server` rewrite behaviour, original `REQUEST_URI` preservation, and platform `$PORT` routing should be confirmed in a real Container Runtime deployment.
-- `vercel.json` contains only platform headers. If framework detection does not select the Container preset, run `vercel project update --framework container --yes` as documented.
+- `Dockerfile`, `Dockerfile.vercel` and `Caddyfile` follow the official Vercel PHP-on-Docker/FrankenPHP guidance and passed a static readiness audit, but Docker/Caddy/FrankenPHP binaries were unavailable in this sandbox. The image was not built and `vercel dev --local` was not run.
+- `Caddyfile` syntax, `php_server` rewrite behaviour, original `REQUEST_URI` preservation, and platform `$PORT` routing were checked statically against official Caddy/FrankenPHP docs but still need confirmation in a real Container Runtime deployment.
+- `vercel.json` contains `version: 2`, edge security headers, revalidatable asset caching and API `no-store`. If framework detection does not select the Container preset, run `vercel project update --framework container --yes` as documented.
 - `vercel.vercel-php.example.json` uses the archived `vercel-community/php` community runtime; it is a fallback example only and should not be enabled together with the Container Dockerfile.
+- `scripts/vercel_preflight.php` and `tests/validate_vercel.php` check env/extensions/config statically; they are not a substitute for a real image build or live deployment.
 
 ## Production data and persistence
 
 - Local SQLite is for development/tests only and is excluded from Git/Docker/ZIP. Production requires PostgreSQL (`DB_DRIVER=pgsql`).
 - `database/migrations/004_least_privilege.sql` contains a literal placeholder password. Replace it manually in a secure environment; never commit the real value.
 - `002_rls.sql` is PostgreSQL/Supabase-only. Direct PDO connections bypass RLS, so the PHP RBAC/ownership checks must remain enabled and the runtime DB role should be least-privileged.
-- Vercel container filesystems are ephemeral/read-only except temporary paths. Uploads must use Supabase Storage; file sessions and local logs must not be relied upon. Sessions/rate limits/audit/idempotency are DB-backed.
+- Vercel container filesystems are ephemeral/read-only except temporary paths. Uploads must use Supabase Storage; file sessions and local logs must not be relied upon. Sessions/rate limits/audit/idempotency are DB-backed, and production logging is stderr-only.
 - Database migrations are SQL files, not an automatic production migration runner. Apply them in order from a trusted client/SQL editor.
 
 ## Optional feature boundaries
@@ -46,3 +47,16 @@ This file separates **implemented and locally verified** work from work that nee
 - Static checks (`SKIP_SMOKE=1 bash tests/run.sh`) now pass on a fresh clone without `.env`/SQLite because the validators use `tests/static_bootstrap.php`. Runtime pages and the HTTP smoke test still require a configured database.
 - Re-running `tests/smoke.py` repeatedly can hit the application's intentional rate limits; use a fresh local database or wait for the configured windows. Do not run it against production.
 - `scripts/bootstrap_admin.php` is one-time and refuses to run after `bootstrap_completed=1` or when an admin already exists.
+
+## Vercel readiness audit (2026-11-25) — fixed but not live-verified
+
+The following were found by a fresh audit and fixed in code; each is guarded by `tests/validate_vercel.php`, but none has been exercised on a real Vercel deployment:
+
+- Production `Logger` no longer writes to `storage/logs` (read-only container FS).
+- PostgreSQL connect no longer issues session-level `SET NAMES` (Supabase transaction pooler discards session state).
+- `Request::isHttps()` handles comma-separated `X-Forwarded-Proto` and RFC 7239 `Forwarded`.
+- Unversioned assets are no longer cached as `immutable`; `/api/*` is explicitly `no-store`.
+- Base image pinned to `dunglas/frankenphp:1.14.0-php8.4-trixie` with `curl` in the extension list.
+- `scripts/vercel_preflight.php` added for env/extension checks before deploy.
+
+Remaining blockers are external: Vercel app/account not connected in Arena, no Supabase credentials/migrations applied, no Docker/FrankenPHP build, no live Stripe/SMTP/Storage test, and no production URL/header inspection.

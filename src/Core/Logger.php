@@ -14,6 +14,10 @@ final class Logger
         $msg = Security::redact($message . ' ' . Helpers::json($context));
         $line = gmdate('c') . ' [' . strtoupper($level) . '] ' . $msg . PHP_EOL;
         error_log('AllStore ' . $line);
+        // Vercel/Container filesystems are read-only apart from ephemeral /tmp.
+        // In production, stderr/stdout (captured by the platform) is the only
+        // durable log destination; never depend on storage/logs.
+        if (Config::get('app.env') === 'production') { return; }
         $dir = (string)Config::get('log.path');
         if (is_dir($dir) && is_writable($dir)) {
             @file_put_contents($dir . '/app-' . gmdate('Y-m-d') . '.log', $line, FILE_APPEND | LOCK_EX);

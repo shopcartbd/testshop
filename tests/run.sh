@@ -31,6 +31,9 @@ python3 -m json.tool vercel.json >/dev/null
 python3 -m json.tool vercel.vercel-php.example.json >/dev/null
 echo "JSON configuration is valid"
 
+echo "== Vercel / Container readiness =="
+php tests/validate_vercel.php
+
 if [[ "${SKIP_SMOKE:-0}" == "1" ]]; then
   echo "Smoke test skipped (SKIP_SMOKE=1)."
   echo "Static checks passed."
