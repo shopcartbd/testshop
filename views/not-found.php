@@ -1,1 +1,0 @@
-<section class="page-intro shell"><span class="eyebrow">404 — PAGE NOT FOUND</span><h1>এই পৃষ্ঠাটি পাওয়া যায়নি।</h1><p>লিংকটি বদলে থাকতে পারে। দোকানে ফিরে আপনার প্রয়োজনীয় জিনিস খুঁজুন।</p><a class="button button-green" href="/shop">সব পণ্য দেখুন</a></section>

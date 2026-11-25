@@ -1,22 +1,61 @@
-# Security notes
+# Security design
 
-## Implemented in the source (not a penetration-test result)
+This document describes implemented controls and the boundaries of verification. It is not a penetration-test report; no live production deployment, external audit, or adversarial load test was performed.
 
-- PHP-managed passwords use PHP password hashing; login/reset have rate limiting. Registration creates only customer roles. Privileged bootstrap is CLI-only and refuses a second owner/admin.
-- Session cookies are HTTP-only, `SameSite=Lax`, strict-mode and secure when the request is HTTPS. Vercel persistence uses PostgreSQL sessions; the handler takes per-session advisory locks across requests to reduce concurrent session/cart overwrites.
-- Mutating HTML/API forms validate CSRF tokens. Admin routes enforce admin/owner roles; account services scope addresses, wishlist, orders, returns and verified reviews to the authenticated account.
-- Database reads/writes use PDO parameters for user data. Checkout locks stock and calculates price, discount, shipping, tax and totals server-side in a transaction. Order keys are replay-protected; cancel/state-transition operations update stock/order history transactionally.
-- Upload code validates image MIME/type/size/dimensions and generates unique Storage object names. HTML output is escaped by the shared helpers; response security headers include CSP nonce, frame denial and no-store for the application.
-- Logs record generic error classes/messages rather than credential values. `.gitignore` excludes environment files, logs, backups, dumps and local tooling folders.
+## Authentication and sessions
 
-These controls are not a substitute for code audit, staged validation, penetration testing or correct production configuration. Functional and security tests have not been run against Supabase/Vercel.
+- Passwords use `password_hash()`/`password_verify()` with PHP's current default algorithm and rehash on login when needed.
+- Generic login errors, per-IP/email-domain rate limits, and active-status checks reduce account enumeration and credential-stuffing risk.
+- Sessions are stored in the database. The browser receives only a random opaque token; the DB stores its SHA-256 hash. `HttpOnly`, `SameSite=Lax`, and secure-when-HTTPS cookies are used.
+- `Session::regenerate()` rotates identifiers on login and privilege changes. Changing a password invalidates other sessions; password reset invalidates all sessions for that user.
+- There is no default admin password. First-admin creation is a one-time CLI script that disables itself.
+- Password-reset tokens are random, single-use, time-limited, and stored as HMAC hashes using the server-side `APP_KEY`. Production requires `APP_KEY`.
 
-## Critical deployment configuration
+## Authorisation
 
-Keep the PostgreSQL password, SMTP password, Storage service-role key and any private access token server-side. Use the dedicated non-superuser runtime role and the four explicit RLS policies described in `docs/SUPABASE_VERCEL_SETUP.md`; do not grant `BYPASSRLS`. Because direct PDO does not carry a Supabase Auth JWT, PHP services—not RLS `auth.uid()`—are responsible for browser-user ownership/role checks. Never expose `app` schema or the application database credential to client code/PostgREST.
+- `Auth::requireAdmin()` and `Auth::can()` implement deny-by-default RBAC. Admin APIs call `api_require_admin()` with a specific permission; admin pages/helpers and `admin_header()` enforce administrator access.
+- Customer account pages require login; order, address, wishlist, notification, review and ticket queries are scoped to the signed-in user's id in repositories/services.
+- Guest order access is limited to a session-stored order number and the confirmation route; private order data is not exposed through public product/catalogue APIs.
+- Direct PDO connections bypass Supabase RLS. Therefore the PHP-level RBAC/ownership checks are mandatory, and `004_least_privilege.sql` should be applied with a replaced, secret password for a DML-only runtime role.
 
-The app requires HTTPS in production, an exact `APP_URL`, a stable connection/session mode, backups, alerting and rotation procedures. Session advisory locks require a direct or session-affinity PostgreSQL connection; do not move to transaction pooling without an alternative lock design and concurrency testing.
+## CSRF, methods, and rate limits
 
-## Known gaps and not-verified items
+- Every mutating API handler calls `api_csrf()`; classic forms use `Session::requireCsrf()` and hidden `csrf_token` fields. The Stripe webhook instead requires a timestamped HMAC signature.
+- API endpoint files declare method allowlists (`api_method()`), producing JSON 405 responses for wrong methods.
+- DB-backed `Security::rateLimit()` protects login, registration, checkout, contact, reviews, tickets, newsletter, password changes and API mutations. It fails closed if the rate-limit store is unavailable.
+- JSON responses include a fresh `csrf_token` after session rotation; `assets/js/app.js` updates the body dataset and hidden form inputs so SPA-style forms remain usable.
 
-No formal SQL injection/XSS/CSRF/IDOR/session-fixation/rate-limit/upload/path-traversal/security review has been executed. In particular, no runtime policy, reset email, Storage bucket policy, secrets scan across Git history, HTTPS/header observation or database-authorization boundary has been verified live. One-time owner creation must be done only from a trusted shell. Rotate any credential ever committed or exposed; deleting it from the latest commit is not sufficient.
+## Input, output, and data access
+
+- `Request` helpers validate scalar values, integers, floats, emails, slugs, ids and id arrays. Identifier/sort/table names are allowlisted in repositories and `Database::ident()`.
+- SQL uses bound parameters. Dynamic SQL fragments are built only from constant allowlists; raw user input is never concatenated into identifiers or sort clauses.
+- `Helpers::e()` escapes HTML output. `Security::plain()` sanitises free text; `api_public_url()` allows only safe relative or HTTPS URLs.
+- API responses use allowlisted public fields through `api_safe_product()`, `api_safe_user()`, `api_safe_order()`, `api_safe_cart_item()` and related helpers. Password hashes, secrets and raw env values are not returned.
+- `Security::redact()` removes likely secret patterns from logs. Logs go to stdout/stderr-friendly output; technical exception details are not shown on error pages.
+- Upload validation checks extension/MIME/size and writes non-executable local files only as a development fallback. Production should use the private/public Supabase Storage buckets.
+
+## Commerce integrity
+
+- Prices, stock, coupon eligibility, shipping, tax and totals are recomputed from the database at checkout; no browser-submitted total is trusted.
+- Checkout uses a transaction, conditional stock decrements, stock movements, coupon usage, order/payment/shipment/invoice rows and notifications. A failed Stripe session start cancels the order and restocks items.
+- A submitted idempotency key is tied to one order and ownership-checked on replay; a fresh key is issued after success. `orders.idempotency_key` is unique.
+- Payment success is never inferred from a browser redirect. The Stripe webhook verifies HMAC, timestamp, order reference, method, amount and currency, then marks the order paid idempotently inside a transaction.
+- COD is available without payment credentials; online card payment activates only when provider and webhook secrets are configured.
+
+## Browser and transport security
+
+- `Security::sendHeaders()` emits CSP, `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, `Permissions-Policy`, and HSTS on production HTTPS. `Caddyfile` and `vercel.json` add platform-level headers.
+- CSP allows same-origin scripts, inline styles (needed for dynamic widths/progress bars), same-origin connections, and local/data/HTTPS images; it disallows inline scripts, `unsafe-eval`, object embeds and third-party script origins.
+- No external fonts, CDN scripts, trackers or stock-image dependencies are used.
+- Private/admin/account/cart/checkout responses are `no-store`; public assets may be cached.
+
+## Filesystem and deployment
+
+- Vercel/FaaS filesystems are ephemeral. Sessions, rate limits, audit logs and idempotency are DB-backed; uploads require object storage; SQLite is local-development only.
+- `router.php` serves only `/assets/*` and public `/storage/uploads/*` as static files. `Caddyfile` denies source/config/migration/docs/test/direct-PHP paths.
+- `.env`, SQLite files, generated app keys, logs, uploads and local admin credential files are excluded from Git/Docker/ZIP.
+- `004_least_privilege.sql` contains a placeholder password that must be replaced manually and never committed.
+
+## Verification boundary
+
+Local tests verified linting, route/handler resolution, class imports, security headers, source-file blocking, CSRF rejection, RBAC redirects, session/CSRF rotation, cart/checkout idempotency, and all page/API route sweeps without 5xx/PHP errors. Not verified: live Supabase RLS/Storage, Stripe webhook with real signature, SMTP, Vercel Container image build, production HSTS/TLS, browser cross-device rendering, concurrency/load, or a third-party security audit. See `TEST_REPORT.md` and `KNOWN_LIMITATIONS.md`.

@@ -1,5 +1,42 @@
+# AllStore · FrankenPHP / Caddy configuration for Vercel Container Runtime.
+# Vercel injects PORT; the default of 80 matches the official PHP-on-Vercel guide.
+{
+	frankenphp
+	order php_server before file_server
+}
+
 :{$PORT:80} {
-    root * /app/public
-    encode zstd gzip
-    php_server
+	root * /app
+	encode zstd gzip
+	header -Server
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(self), usb=()"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+
+	# Never serve source, configuration, migrations, docs, secrets, local DBs
+	# or PHP files other than the rewritten front controller.
+	@denied path_regexp ^/(?:\.env|\.git|\.dockerignore|\.gitignore|composer|package|Dockerfile|Caddyfile|vercel|README|src|database|scripts|tests|docs|includes|api/handlers)|(?:^|/)[^/]+\.(?:md|sql|log|ini|sqlite|zip|sh|yml|yaml|toml|json)$
+	@privatePhp {
+		path_regexp \.php$
+		not path /index.php
+	}
+	@privateStorage {
+		path_regexp ^/storage/
+		not path /storage/uploads/*
+	}
+
+	route {
+		respond @denied 404
+		respond @privatePhp 404
+		respond @privateStorage 404
+		php_server {
+			try_files {path} index.php
+			env REQUEST_URI {http.request.orig_uri}
+			env SCRIPT_NAME /index.php
+		}
+	}
 }

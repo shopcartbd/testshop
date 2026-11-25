@@ -1,31 +1,94 @@
 # Environment variables
 
-Configure these under the Vercel project's **Settings → Environment Variables** as server-side values. Add them to the environments that should run (Production and, separately, Preview). Do not prefix secret values with `NEXT_PUBLIC_` or expose them to the browser. Redeploy after changes.
+All variables are read by `src/Core/Env.php` and mapped in `src/Core/Config.php`. Copy `.env.example` to `.env` for local development only. On Vercel, set values in **Project → Settings → Environment Variables** (or `vercel env add`); a `.env` file inside the image is not a reliable production secret source and must not be committed.
 
-| Variable | Required | Guidance |
-| --- | --- | --- |
-| `APP_URL` | Yes for production | Exact HTTPS origin without trailing slash; used for canonical URLs, sitemap and email links. |
-| `SUPABASE_DB_URL` | Yes (or component variables) | Supabase PostgreSQL URI for dedicated `allstore_app`, with TLS (`sslmode=require`). Never use an anon key as a database password. |
-| `SESSION_DRIVER` | Yes on Vercel | Set `database`; local default is `file`. Requires migration 002 and `app.sessions` privileges. |
-| `APP_NAME` | Optional | Store display name; defaults to `AllStore`. |
-| `APP_CURRENCY` | Optional | Defaults to `BDT`; checkout currently accepts BDT only. |
-| `APP_KEY` | Strongly recommended | A unique random server-only secret (e.g. 64 hex characters) used to HMAC rate-limit bucket identifiers. Changing it resets existing rate-limit buckets. |
-| `APP_ENV` | Optional/informational | `production` is a useful label, but the current application code does not branch on it. |
-| `LOG_LEVEL` | Optional/not consumed | Listed as a convention only; current application logging does not read this setting. |
-| `PORT` | Supplied by container | Vercel runtime supplies it; Docker/Caddy uses it. Usually do not set manually. |
+`.env`, `.env.*` (except `.env.example`), `storage/*.sqlite`, `storage/app.key`, logs and uploads are excluded from Git/ZIP/Docker build contexts where appropriate. Never put a secret key in a browser-visible variable.
 
-Instead of `SUPABASE_DB_URL`, the code accepts all of `SUPABASE_DB_HOST`, `SUPABASE_DB_PORT` (default 5432), `SUPABASE_DB_NAME` (default `postgres`), `SUPABASE_DB_USER`, `SUPABASE_DB_PASSWORD` and `SUPABASE_DB_SSLMODE` (`require`, `verify-ca` or `verify-full`). `DATABASE_URL` is also accepted as a fallback. Use the exact Supabase connection host/user/port shown for the chosen connection mode; URL-encode reserved characters in a manually assembled URI.
+## App
 
-Prefer Supabase direct or **Session pooler** connections. The database session handler holds a PostgreSQL advisory lock across a PHP session request to prevent concurrent requests from overwriting authentication/cart state. Transaction-mode poolers do not preserve session-level database state, so do not use one for this session-locking setup without replacing that design and verifying it. Connection capacity, networking and TLS have not been tested against the owner's Supabase project.
+| Variable | Required | Default | Notes |
+|---|---:|---|---|
+| `APP_NAME` | No | `AllStore` | Store name used in UI and emails. |
+| `APP_ENV` | Yes in prod | `local` | `local`, `staging`, or `production`. Production forbids SQLite. |
+| `APP_DEBUG` | No | `true` | Forced off in production. |
+| `APP_URL` | Yes in prod | `http://localhost:8080` | Canonical absolute URL; used for payment success/cancel and password-reset links. |
+| `APP_TIMEZONE` | No | `UTC` | PHP timezone, e.g. `Asia/Dhaka`. |
+| `APP_CURRENCY` | No | `USD` | Three-letter ISO currency code; amounts are stored as integer cents. |
+| `APP_LOCALE` | No | `en` | Reserved for locale-aware formatting. |
+| `PORT` | Container runtime | `80` | Vercel injects it; `Caddyfile` listens on `:{$PORT:80}`. `EXPOSE` alone does not set Vercel routing. |
+| `APP_KEY` | **Yes in prod** | dev fallback local | 32+ random bytes (hex/base64). Server-side HMAC pepper for reset tokens. Must be unique and secret. |
 
-## Optional SMTP
+## Database
 
-To send password reset and order emails, configure all of: `MAIL_HOST`, `MAIL_PORT` (usually 587), `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS`; `MAIL_FROM_NAME` is optional. The implementation uses SMTP with STARTTLS. Do not assume a message was delivered until the provider accepts and delivers a test.
+| Variable | Required | Notes |
+|---|---:|---|
+| `DB_DRIVER` | Yes | `local` for SQLite development/tests; `pgsql` for Supabase/PostgreSQL production. |
+| `DATABASE_URL` | Yes in prod (or DB_* set) | Prefer Supabase **transaction pooler** URI on port `6543` with `sslmode=require` for serverless. Use direct `5432` only for migrations/backup or a persistent host. |
+| `SUPABASE_DB_HOST` | Alternative | Discrete DB host if not using `DATABASE_URL`. |
+| `SUPABASE_DB_PORT` | No | Default `6543`. Use `5432` for direct/session pooler. |
+| `SUPABASE_DB_NAME` | No | Default `postgres`. |
+| `SUPABASE_DB_USER` | Alternative | DB user when not using `DATABASE_URL`. |
+| `SUPABASE_DB_PASSWORD` | Alternative | DB password when not using `DATABASE_URL`; server-side only. |
+| `SUPABASE_DB_SSLMODE` | No | `require` (default), `verify-ca`, or `verify-full`. |
+| `DB_POOL_MODE` | No | `transaction` (default; emulated prepares) or `session`. Supabase transaction pooler does not support server-side prepared statements. |
 
-## Optional Supabase Storage
+`001_schema.sql` is portable PostgreSQL 15+/SQLite 3.35+ DDL. `002_rls.sql` and `004_least_privilege.sql` are PostgreSQL/Supabase-specific. Replace the placeholder password in `004_least_privilege.sql` manually before running it; never commit the replacement.
 
-For admin product-image uploads, configure `SUPABASE_URL`, `SUPABASE_STORAGE_SERVICE_KEY`, and optionally `SUPABASE_STORAGE_BUCKET` (default `product-media`). The app sends uploads server-to-server; keep the Storage service-role credential private. A public-read bucket is needed if product images are to load without signed URLs. Bucket policy and uploads remain unverified.
+## Supabase Storage and optional REST
 
-## Example file
+| Variable | Required | Notes |
+|---|---:|---|
+| `SUPABASE_URL` | For Storage | `https://<REF>.supabase.co`. |
+| `SUPABASE_SECRET_KEY` | For Storage | New `sb_secret_...` key; **server-side only**. Newer alternative to the legacy service-role JWT. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Legacy alternative | Legacy service-role JWT; **server-side only**. Never expose to the browser. |
+| `SUPABASE_STORAGE_BUCKET` | No | Public product-image bucket; default `product-images`. |
+| `SUPABASE_PRIVATE_BUCKET` | No | Private documents/attachments bucket; default `private-documents`. |
 
-`.env.example` lists the current settings with blank secrets. It is a template only and is safe to commit. Do not commit `.env`, `.env.local`, `.env.production`, credentials, private keys, backups or production logs.
+`003_storage.sql` creates the public product-images bucket and a private documents bucket. The PHP app uses a direct PDO connection; RLS does not constrain that privileged DB role, so PHP-level RBAC and ownership checks are mandatory.
+
+## Security and rate limiting
+
+| Variable | Required | Default | Notes |
+|---|---:|---|---|
+| `SESSION_IDLE_TIMEOUT` | No | `7200` | Seconds; minimum 300. DB-backed session expiry. |
+| `CSRF_HEADER_NAME` | No | `X-CSRF-TOKEN` | Browser JS sends this header; classic forms send hidden `csrf_token`. |
+| `RATE_LIMIT_LOGIN_MAX` | No | `5` | Login attempts per bucket/window. |
+| `RATE_LIMIT_LOGIN_WINDOW` | No | `900` | Seconds; minimum 60. |
+
+## One-time administrator bootstrap
+
+These are read **only** by `scripts/bootstrap_admin.php` from a secure CLI shell, never by the web application:
+
+| Variable | Required | Notes |
+|---|---:|---|
+| `ADMIN_BOOTSTRAP_EMAIL` | Yes | Valid email for the first `super_admin`. |
+| `ADMIN_BOOTSTRAP_PASSWORD` | Yes | At least 12 characters; use a unique generated secret. |
+| `ADMIN_BOOTSTRAP_NAME` | No | Default `Store Owner`. |
+
+The script refuses to run if bootstrap was completed or an admin already exists. There is no default password in seed data.
+
+## Optional integrations
+
+Leaving these empty disables the integration rather than faking delivery/payment.
+
+| Variable | Purpose |
+|---|---|
+| `MAIL_PROVIDER_URL` | HTTPS JSON mail API endpoint. |
+| `MAIL_API_KEY` | Bearer token for the mail provider; server-side only. |
+| `MAIL_FROM_ADDRESS` | Verified sender address. |
+| `MAIL_FROM_NAME` | Sender display name. |
+| `PAYMENT_PROVIDER` | Set to `stripe` to enable online card payments. |
+| `PAYMENT_GATEWAY_SECRET` | Stripe secret API key; server-side only. |
+| `PAYMENT_WEBHOOK_SECRET` | Stripe `whsec_...` signing secret for `POST /api/webhooks/stripe`. |
+| `LOG_LEVEL` | `info` by default; logger uses stdout/stderr-friendly redacted output. |
+
+No `SHIPPING_API_KEY` is required because shipping rates are computed from the local database. External courier/SMS/push providers are not wired in and would require additional credentials and code.
+
+## Production checklist
+
+- `APP_ENV=production`, `APP_DEBUG=false`, `APP_KEY=<random secret>`, canonical HTTPS `APP_URL`.
+- `DB_DRIVER=pgsql` and transaction-pooler `DATABASE_URL` with `sslmode=require`.
+- Supabase migrations applied in order; Storage buckets and private-document policies configured.
+- SMTP/Stripe/Storage secrets set only in Vercel project settings/secret manager.
+- `.env`, SQLite files, generated logs, uploads and local admin credential files excluded from Git/container/ZIP.
+- `/api/health`, `/`, `/admin/login`, CSP/HSTS headers and one authenticated admin page checked after deployment.

@@ -1,21 +1,76 @@
-# Test and verification report
+# Test report
 
-**Status: source-level checks passed; no end-to-end or production test suite has run.** No production/customer records were read or written. All network-facing business integrations remain unverified.
+**Date:** 2026-11-25 (UTC workspace date)  
+**Scope:** local sandbox only. No production deployment, live Supabase connection, Storage upload, RLS enforcement, Stripe live event, SMTP delivery, Docker image build, or browser/device QA was performed.
 
-## Checks run in the sandbox
+## Environment
 
-- `php -l` across every repository PHP file (42 files) — passed on CLI PHP 8.3.6. Production image targets PHP 8.4.
-- `composer validate --strict` — passed. `node --check public/assets/store.js` — passed.
-- `pglast.parse_sql` — syntax-parsed migration 001 (77 statements), migration 002 (121 statements), and `database/seed.sql` (3 statements). This is only a parser check; PostgreSQL did not execute any statements.
-- Safe local PHP-server smoke requests with no database credentials configured: `GET /health` returned 200; `GET /login` rendered 200; `GET /api/v1/csrf` returned 200 with a CSRF token; `GET /` returned a generic 500 because the catalog requires the unconfigured database. The homepage response did not expose PHP stack-trace/SQL details. These are render/error-handling checks, not authentication or storefront acceptance tests.
-- A heuristic source scan found no obvious private-key/payment-key or hardcoded-password patterns. This is not a comprehensive Git-history secret scanner.
+| Item | Value |
+|---|---|
+| PHP | 8.4.28 CLI with `pdo_sqlite`, `pdo_pgsql`, `pgsql`, `sqlite3`, `curl`, `gd`, `mbstring`, `xml` |
+| Web server | PHP built-in server bound to `0.0.0.0:8080` using `router.php` (Arena live preview) |
+| Database | local SQLite `storage/allstore.sqlite`, created with `migrate.php --reset` and seeded |
+| JavaScript syntax | Node.js (`node --check`) |
+| HTTP smoke test | Python 3 standard library, no external packages |
+| Composer | Not required; no Composer dependencies |
 
-## Not run / blocked
+## Commands executed and results
 
-- Supabase: migration execution/compatibility, runtime grants and RLS policies, PDO connection, owner bootstrap, auth/ownership, transaction/stock/coupon/session behavior.
-- Functional: register/login/logout/reset, live browse/search/filter/sort, variants, cart mutations, wishlist, coupon/checkout/order creation, tracking, reviews, returns/support, admin CRUD/stock/order/banner/customer/report paths.
-- Security: SQL injection, XSS, CSRF, unauthorized admin access, broken access control/IDOR, session fixation, rate limits, upload/path traversal, secret exposure, manipulated totals, unauthorized orders, stock races and duplicate submissions.
-- UI/accessibility: desktop/tablet/mobile visual review, keyboard/focus/contrast/screen reader behavior, dialogs, forms, empty/error/loading states and WCAG 2.2 AA.
-- Deployment: Docker image build (Docker unavailable), Vercel build/deployment, runtime/database network, environment validation, HTTPS, static assets/API routes, Storage, SMTP and production logs.
+| Check | Command | Result |
+|---|---|---|
+| Schema migration | `php database/migrate.php --reset` | `SQLite schema applied`; `Tables created: 58` |
+| Seed | `php database/seed.php` | `Seed complete: 24 products, 23 categories, 8 brands.` |
+| Admin bootstrap | `ADMIN_BOOTSTRAP_* php scripts/bootstrap_admin.php` | One unique local `super_admin` created; bootstrap disabled. No default password. |
+| Full PHP syntax | `php -l` on every PHP file | **184/184 passed** |
+| JS syntax | `node --check assets/js/*.js` | **3/3 passed** |
+| Python test syntax | `python3 -m py_compile tests/smoke.py` | passed |
+| Static class imports | `php tests/validate_classes.php` | scanned **184 PHP files**; all static class references resolve |
+| Route/handler/method validation | `php tests/validate.php` | **593 static checks**; 44 API routes, 90 page routes, 44 handler files; passed |
+| JSON config | `python3 -m json.tool vercel.json` and `vercel.vercel-php.example.json` | valid |
+| Static verification wrapper | `SKIP_SMOKE=1 bash tests/run.sh` | passed (PHP/JS/Python syntax, class/route validators, JSON) |
+| Local HTTP smoke test | `ADMIN_PASSWORD=... python3 tests/smoke.py` | **71 checks, 0 failures** |
 
-See `TODO.md` for launch prerequisites and incomplete features. Run all data and security tests only in a separate staging environment. Do not infer Vercel/Supabase success from code checks or Git push.
+## HTTP smoke test coverage
+
+The final smoke run exercised:
+
+- Homepage, CSP/nosniff/Referrer/X-Frame security headers, four static assets, and 11 blocked source/config/secret paths (`.env`, `Dockerfile`, migrations, handlers, SQLite DB, tests, docs).
+- `GET /api/health`, product listing/detail, search suggestions, empty cart, method allowlists, missing CSRF rejection, and unconfigured Stripe webhook rejection.
+- A safe `GET` against **all 44 declared API patterns**; no 5xx, PHP fatal markers, or invalid JSON.
+- Cart add → coupon → quantity update → remove → re-add, checkout page, hidden idempotency key, JSON order creation, replay returning the same order, real HTML checkout form submission, and order confirmation page.
+- Newsletter, contact message, customer registration, account overview, orders API, API profile update, wishlist add/list/remove, review submission, support ticket creation, notification read, password change with CSRF/session rotation, stale-token rejection, password-reset request, logout, login with the new password, HTML profile form save and success flash.
+- Guest admin-page/admin-API blocking, guest admin-login page rendering, administrator login, dashboard/settings APIs, and a **12-pattern authenticated admin API sweep** with no server errors.
+- An authenticated sweep of **87 page routes** (all 90 declared page routes except `/logout`, `/admin/logout`, and the deliberately 500-status `/500` page). No 5xx response or PHP error marker was observed.
+
+A check of the development-server log tail after the final HTTP and Chromium runs found no `Class "Helpers" not found`, `php.error`, `Uncaught`, `SQLSTATE`, or `Fatal error` entries. Expected informational entries (audit/order, admin login, mail-not-configured, CSRF rejection tests) are not failures.
+
+## Chromium visual capture
+
+Actual browser screenshots were captured with headless Chromium 156 and Playwright against the running local preview. The script rendered homepage, shop, product detail, admin login, authenticated admin dashboard, and a 390×844 mobile homepage; it collected page errors, console errors and HTTP 5xx responses. The first capture exposed a missing `includes/components.php` import on the standalone guest admin-login page (`Call to undefined function icon()`), which was fixed. A fresh capture after the fix reported **0 browser errors**. The labelled contact sheet is `docs/design-preview.jpg`; individual PNG screenshots are outside the source ZIP at `/home/user/allstore-design-preview/*.png`. This is a visual smoke capture, not a full cross-browser/accessibility audit.
+
+## Defects found and fixed during verification
+
+The first full HTTP sweep exposed three real runtime defects: missing `use AllStore\Core\Helpers;` imports in `admin/brands.php`, `admin/coupons.php`, and `admin/reviews.php`. A token-based static validator (`tests/validate_classes.php`) was added to catch this class of bug, and the imports were fixed. An ambiguous SQL fixture in the smoke test was also corrected so `/admin/customers/{id}` receives a real profile id. A later Chromium capture found that the standalone `admin/login.php` used `icon()` without loading `includes/components.php`; the import and a guest-login regression check were added.
+
+Earlier code review and runtime work also fixed: checkout idempotency key replay/ownership and rotated keys; the nullable cart id used after checkout; profile flash messages after redirect; password-change session invalidation and CSRF token refresh; support-ticket lookup by ticket number; admin header RBAC defence in depth; static-file exposure in `router.php`; and Caddy/Container configuration alignment.
+
+## Verification boundary
+
+The following remain **unverified** and are listed in `KNOWN_LIMITATIONS.md`:
+
+- Docker/FrankenPHP/Caddy image build or `vercel dev --local` container validation (Docker/Caddy binaries were unavailable in this sandbox).
+- Vercel deployment, framework/Container preset selection, production `$PORT` routing, HSTS/TLS header inspection on a public domain.
+- Live Supabase PostgreSQL connectivity, transaction-pooler behaviour, RLS policies, Storage buckets and least-privilege DB role.
+- Stripe checkout/webhook with real credentials and signature; SMTP delivery; external courier/SMS/push providers.
+- Full interactive responsive-breakpoint inspection, cross-browser JS execution, accessibility audit, visual design sign-off, load/concurrency and third-party security audit. Headless Chromium screenshots were captured, but they are a visual smoke check rather than full QA.
+
+`tests/smoke.py` mutates the local SQLite database and generates unique customer/order/newsletter/ticket/review fixtures. It must not be run against production. The final ZIP excludes the local `.env`, SQLite database and local admin credential file.
+
+## Release archive verification
+
+`/home/user/allstore.zip` was built from the final source tree. Archive verification results:
+
+- ZIP integrity: `ok`; **228 entries**, approximately **1.4 MB** compressed.
+- All **184 source PHP files**, all 8 Markdown docs and `docs/design-preview.jpg` are present.
+- Includes `README.md`, `Caddyfile`, `Dockerfile`, `Dockerfile.vercel`, `.dockerignore`, `.gitignore`, `vercel.json`, `vercel.vercel-php.example.json`, all tests, `.env.example`, and both `storage/*/.gitkeep` placeholders.
+- Zero forbidden entries: no `.env`, `.env.*` other than `.env.example`, SQLite DB/WAL/SHM, `app.key`, logs, uploads, `__pycache__`, `.pyc`, archives, or local admin credential file.

@@ -1,31 +1,74 @@
 # AllStore
 
-AllStore is a PHP 8.4, server-rendered marketplace storefront for Bangladesh, backed by PostgreSQL and designed to connect to Supabase. The existing `shopcartbd/testshop` repository is the source of truth; this README describes the code, not a verified live store. `APP_NAME` can replace the AllStore display name.
+**AllStore** is a dependency-free PHP e-commerce application with a complete storefront, customer account area, administration panel, JSON API, PostgreSQL/Supabase-ready schema, and a FrankenPHP/Caddy container for Vercel.
 
-## Included in the source
+> সংক্ষেপে: সম্পূর্ণ PHP ই-কমার্স প্রজেক্ট, লোকাল SQLite ডেমো, Supabase/PostgreSQL-এর জন্য migration, Vercel Container Runtime-এর জন্য Dockerfile/Caddyfile, API ডকুমেন্টেশন, টেস্ট রিপোর্ট ও ZIP ডেলিভারি তৈরি করা হয়েছে। লাইভ Vercel/Supabase/Stripe/SMTP ডিপ্লয়মেন্ট বা ক্রেডেনশিয়াল যাচাই করা হয়নি।
 
-The repository now contains catalog browsing/search/filter/sort/pagination, product details and moderated reviews, a session cart, customer registration/login/logout/password reset/account pages, addresses, wishlist, account-scoped order history, order tracking, support tickets and return requests. Checkout is transactional **Cash on Delivery only**, with stock locking, server-calculated prices/shipping/coupons/tax, coupon usage records, inventory history and order idempotency. The admin UI/services include product editing, categories, brands, stock adjustments, order status and tracking, customer status, review moderation, banners, summary and sales reports. A same-origin versioned JSON API, SMTP mailer, optional Supabase Storage upload, database-backed PHP sessions, owner bootstrap CLI, migrations and deployment/setup docs are included.
+## What is included
 
-A number of those code paths still require a real staging database and end-to-end checks. Product variants/bundles are not checkout-enabled; online payments, refunds, courier booking/tracking APIs and mailing-list confirmation delivery are not connected. The example Bangladesh delivery method is **৳80 and must be changed**. See [TODO.md](TODO.md) for the full remaining list.
+- **Storefront:** home, shop, category/subcategory, brand, product detail, search, deals, flash sale, best sellers, new arrivals, trending, cart, checkout, order confirmation, blog, FAQ, contact, policies, sitemap/robots and error pages.
+- **Customer account:** register, login/logout, password reset request, overview, profile, addresses, orders, tracking, wishlist, reviews, notifications, coupons, returns/refunds, support tickets and password change.
+- **Admin:** dashboard, reports, products/forms/variants, categories, attributes, brands, warehouses/inventory, orders/customers, coupons/promotions/flash sales, banners/homepage builder, reviews, payments/transactions, shipping/couriers, returns/refunds, CMS/blog/pages, roles/permissions/admin users, activity logs, notifications, settings/security and tickets.
+- **API:** 44 route patterns mapped to 43 endpoint handlers plus `api/handlers/_common.php`; JSON envelope, method allowlists, CSRF on mutations, rate limits, RBAC and redacted public fields.
+- **Data:** portable PostgreSQL 15+/SQLite schema with 58 tables, Supabase RLS/Storage/least-privilege migrations, idempotent local seed, DB-backed sessions/rate limits/audit/idempotency.
+- **Frontend:** four CSS files, three dependency-free JavaScript files, local generated imagery and SVG favicon; no external fonts, CDNs or tracking scripts.
+- **Ops:** `Dockerfile`, `Dockerfile.vercel`, `Caddyfile`, `vercel.json`, `.dockerignore`, `.env.example`, one-time admin bootstrap and validation/smoke tests.
+- **Docs:** `docs/` contains environment, API, admin, deployment, security, architecture, test report and limitations.
 
-## Stack and deployment shape
+## Quick start (local)
 
-The app uses PHP 8.4 / FrankenPHP + Caddy in the root `Dockerfile`, PHP PDO PostgreSQL and Supabase PostgreSQL/Storage. Vercel's Container Runtime is documented as beta; the single-container setup does not require `vercel.json`. The project/runtime, Supabase credentials, SMTP/Storage configuration and actual deployment have not been verified from this sandbox. A push to `main` may trigger Vercel if the project is linked to that repository/branch; a push is not proof of a successful deployment.
+Requires PHP 8.3+ with `pdo_sqlite`, `pdo_pgsql`, `mbstring`, `gd`, `curl`, `xml`; Python 3 and Node are only needed to run the optional test checks. Composer is **not** required.
 
-## Setup
+```bash
+cd allstore
+cp .env.example .env              # local development only; never commit .env
+php database/migrate.php --reset  # creates storage/allstore.sqlite
+php database/seed.php             # 24 products, 23 categories, 8 brands, demo content
+php -S 0.0.0.0:8080 router.php   # open http://localhost:8080
+```
 
-1. Create a Supabase project. Apply `database/migrations/001_initial_schema.sql`, then `database/migrations/002_operational_marketplace.sql`, then optionally `database/seed.sql` in Supabase SQL Editor. Back up data and validate both migrations on a separate staging project first; migrations are not rerunnable.
-2. Create a dedicated non-superuser `allstore_app` database login, apply the documented grants and trusted PHP runtime RLS policies, and keep its password server-side.
-3. Configure the required Vercel variables in [docs/ENVIRONMENT_VARIABLES.md](docs/ENVIRONMENT_VARIABLES.md), including `SESSION_DRIVER=database`. Prefer Supabase direct or **Session pooler** connections for the advisory-locked PHP session handler; test network/connection capacity before production.
-4. Configure `APP_URL` to the exact HTTPS origin. For a first owner, run `php scripts/bootstrap-admin.php` from a trusted terminal after migrations and database access are ready.
-5. Set a real delivery rate and policy, then verify the app against a staging database and test customer/admin scenarios before accepting orders.
+The local `.env` uses `DB_DRIVER=local` and a development-only `APP_KEY`. Production requires `APP_ENV=production`, `DB_DRIVER=pgsql`, a real `DATABASE_URL`/`SUPABASE_DB_*`, and a secret `APP_KEY`.
 
-The detailed [Supabase and Vercel setup guide](docs/SUPABASE_VERCEL_SETUP.md) covers the SQL role/policies, migrations, Vercel values and optional integrations. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), [docs/DATABASE.md](docs/DATABASE.md), [docs/API.md](docs/API.md), [docs/SECURITY.md](docs/SECURITY.md), [docs/TEST_REPORT.md](docs/TEST_REPORT.md) and [docs/ENVIRONMENT_VARIABLES.md](docs/ENVIRONMENT_VARIABLES.md).
+Create the first administrator from a secure shell (there is no default password):
 
-## Local development
+```bash
+ADMIN_BOOTSTRAP_EMAIL='owner@example.com' \
+ADMIN_BOOTSTRAP_PASSWORD='use-a-long-unique-secret' \
+ADMIN_BOOTSTRAP_NAME='Store Owner' \
+php scripts/bootstrap_admin.php
+```
 
-Use PHP 8.4 with PDO PostgreSQL, `mbstring`, `fileinfo`, `curl`, Composer, and a staging PostgreSQL database. Copy `.env.example` to an ignored `.env`, set database variables, apply the migrations/seed to the staging database, and run `composer install`. Serve the app with `php -S 127.0.0.1:8080 -t public public/index.php`. Do not connect local experiments to production data. Docker image build/boot has not been verified in this environment because Docker is unavailable.
+For this Arena workspace only, a unique local-preview administrator was created and its password saved outside the project at `/home/user/allstore-local-admin.txt`. The local `.env`, SQLite database and that credentials file are **not** included in `allstore.zip`.
 
-## Secrets and safety
+## Test commands
 
-Never commit `.env`, database passwords, SMTP credentials, Supabase Storage service-role keys, private keys, SQL dumps or sensitive logs. `.env.example` is safe to commit and contains blank secret fields. PHP authorization must remain enforced in the application: the trusted database credential has server-side access and must never be exposed to browser JavaScript, PostgREST clients or public API output. Do not claim a production deployment or order/payment success until independently verified.
+```bash
+bash tests/run.sh                         # lint + static validators + HTTP smoke test
+php tests/validate.php                    # route/handler/static-call checks
+php tests/validate_classes.php            # unresolved class-import check
+python3 tests/smoke.py                    # requires the server to be running
+```
+
+`tests/smoke.py` mutates the local SQLite database and must never be run against production. It generated unique customer/order/newsletter/ticket/review fixtures during verification. See `docs/TEST_REPORT.md` for actual results and `docs/KNOWN_LIMITATIONS.md` for items not verified.
+
+## Deployment shape
+
+The primary deployment path is the official Vercel PHP-on-Docker/Container Runtime approach: root `Dockerfile` with FrankenPHP, `Caddyfile` listening on `$PORT`, PostgreSQL through Supabase's transaction pooler, and environment variables from Vercel project settings. No framework-specific `vercel.json` functions config is needed. `vercel.vercel-php.example.json` is kept only as a documented, unsupported community-runtime fallback. See `docs/DEPLOYMENT_GUIDE.md`.
+
+## Documentation index
+
+| File | Purpose |
+|---|---|
+| `docs/ENVIRONMENT_VARIABLES.md` | Every supported environment variable and required/optional status |
+| `docs/API_DOCUMENTATION.md` | JSON envelope, CSRF/auth rules and all 44 endpoint patterns |
+| `docs/ADMIN_SETUP.md` | One-time administrator bootstrap and RBAC notes |
+| `docs/DEPLOYMENT_GUIDE.md` | Supabase + Vercel Container Runtime deployment |
+| `docs/SECURITY.md` | Threat model and implemented controls |
+| `docs/ARCHITECTURE.md` | Request lifecycle, directories, data and services |
+| `docs/TEST_REPORT.md` | Exact tests executed and results |
+| `docs/KNOWN_LIMITATIONS.md` | Credential-blocked and unverified areas |
+| `docs/design-preview.jpg` | Chromium screenshot contact sheet of the actual local UI |
+
+## Important status
+
+This workspace contains a working **local** build with a live preview. It does **not** claim a live production URL, GitHub push, Vercel deployment, Supabase project, Storage bucket, RLS enforcement, Stripe live payment, SMTP delivery or browser cross-device QA. Those require credentials and an actual deployment; the code, migrations, configuration and documentation are provided to make those steps repeatable.
