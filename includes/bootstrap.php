@@ -52,9 +52,13 @@ set_error_handler(static function (int $severity, string $message, string $file,
 });
 
 Security::sendHeaders();
-// /api/health must be able to report database/schema problems without first
-// requiring a sessions table. All other routes keep DB-backed sessions.
-$isHealthCheck = PHP_SAPI !== 'cli' && str_starts_with(Request::path(), '/api/health');
+// /api/health and the temporary one-time setup route must be able to report
+// database/schema problems without first requiring a sessions table.
+// All other routes keep DB-backed sessions.
+$isHealthCheck = PHP_SAPI !== 'cli' && (
+    str_starts_with(Request::path(), '/api/health') ||
+    str_starts_with(Request::path(), '/api/setup/')
+);
 if (!$isHealthCheck) {
     Session::start();
     Session::prune();

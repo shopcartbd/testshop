@@ -12,10 +12,19 @@ use AllStore\Core\Database;
 use AllStore\Core\Helpers;
 use AllStore\Core\Config;
 
-if (PHP_SAPI !== 'cli') { http_response_code(403); exit('CLI only.'); }
+if (PHP_SAPI !== 'cli' && !defined('ALLSTORE_SETUP_CONTEXT')) { http_response_code(403); exit('CLI only.'); }
+if (!function_exists('allstore_seed_output')) {
+    function allstore_seed_output(string $line): void
+    {
+        if (defined('ALLSTORE_SETUP_CONTEXT')) { $GLOBALS['allstore_setup_log'][] = $line; }
+        else { fwrite(STDOUT, $line); }
+    }
+}
 $force = in_array('--force', $argv ?? [], true);
 if (!$force && Database::value("SELECT value FROM settings WHERE key='seeded_v1'") === '1') {
-    fwrite(STDOUT, "Already seeded. Use --force to reseed.\n"); exit(0);
+    allstore_seed_output("Already seeded. Use --force to reseed.\n");
+    if (defined('ALLSTORE_SETUP_CONTEXT')) { return; }
+    exit(0);
 }
 if ($force) {
     // Development helper: wipe application tables but keep the schema.
@@ -24,20 +33,24 @@ if ($force) {
     }
 }
 $now = Helpers::now();
-function U(): string { return Helpers::uuid(); }
-function row(string $table, array $d): void { Database::insert($table, $d); }
+if (!function_exists('allstore_seed_uuid')) {
+    function allstore_seed_uuid(): string { return Helpers::uuid(); }
+}
+if (!function_exists('allstore_seed_row')) {
+    function allstore_seed_row(string $table, array $d): void { Database::insert($table, $d); }
+}
 
 /* ------------------------------------------------------------------ RBAC */
 $roles = ['super_admin'=>'Super Administrator','admin'=>'Administrator','staff'=>'Store Staff','customer'=>'Customer'];
 $roleIds = [];
-foreach ($roles as $slug => $name) { $roleIds[$slug] = U(); row('roles', ['id'=>$roleIds[$slug],'name'=>$name,'slug'=>$slug,'description'=>'Seeded role','is_system'=>1,'created_at'=>$now]); }
+foreach ($roles as $slug => $name) { $roleIds[$slug] = allstore_seed_uuid(); allstore_seed_row('roles', ['id'=>$roleIds[$slug],'name'=>$name,'slug'=>$slug,'description'=>'Seeded role','is_system'=>1,'created_at'=>$now]); }
 $perms = ['dashboard.view','products.view','products.manage','categories.manage','brands.manage','attributes.manage',
     'inventory.manage','orders.view','orders.manage','customers.view','customers.manage','coupons.manage',
     'promotions.manage','cms.manage','reviews.moderate','reports.view','settings.manage','security.manage','tickets.manage','users.manage'];
 $permIds = [];
-foreach ($perms as $p) { $permIds[$p] = U(); row('permissions', ['id'=>$permIds[$p],'name'=>ucwords(str_replace('.',' ',$p)),'slug'=>$p,'module'=>explode('.',$p)[0],'created_at'=>$now]); }
-foreach (['super_admin','admin'] as $r) { foreach ($permIds as $pid) { row('role_permissions', ['role_id'=>$roleIds[$r],'permission_id'=>$pid]); } }
-foreach (array_slice($perms,0,9) as $p) { row('role_permissions', ['role_id'=>$roleIds['staff'],'permission_id'=>$permIds[$p]]); }
+foreach ($perms as $p) { $permIds[$p] = allstore_seed_uuid(); allstore_seed_row('permissions', ['id'=>$permIds[$p],'name'=>ucwords(str_replace('.',' ',$p)),'slug'=>$p,'module'=>explode('.',$p)[0],'created_at'=>$now]); }
+foreach (['super_admin','admin'] as $r) { foreach ($permIds as $pid) { allstore_seed_row('role_permissions', ['role_id'=>$roleIds[$r],'permission_id'=>$pid]); } }
+foreach (array_slice($perms,0,9) as $p) { allstore_seed_row('role_permissions', ['role_id'=>$roleIds['staff'],'permission_id'=>$permIds[$p]]); }
 
 /* --------------------------------------------------------------- settings */
 $settings = [
@@ -51,7 +64,7 @@ $settings = [
     'newsletter_heading'=>'Stay in the loop', 'newsletter_text'=>'New arrivals, editorial picks and member-only offers. No noise.',
     'maintenance_mode'=>'0', 'seeded_v1'=>'1', 'bootstrap_completed'=>'0',
 ];
-foreach ($settings as $k=>$v) { row('settings', ['key'=>$k,'value'=>$v,'group_name'=>'general','updated_at'=>$now]); }
+foreach ($settings as $k=>$v) { allstore_seed_row('settings', ['key'=>$k,'value'=>$v,'group_name'=>'general','updated_at'=>$now]); }
 
 /* -------------------------------------------------------------- catalogue */
 $categories = [
@@ -70,15 +83,15 @@ $categories = [
 ];
 $catIds = []; $sort = 0;
 foreach ($categories as $name => $meta) {
-    $id = U(); $catIds[$name] = $id;
-    row('categories', ['id'=>$id,'parent_id'=>null,'name'=>$name,'slug'=>Helpers::slugify($name),
+    $id = allstore_seed_uuid(); $catIds[$name] = $id;
+    allstore_seed_row('categories', ['id'=>$id,'parent_id'=>null,'name'=>$name,'slug'=>Helpers::slugify($name),
         'description'=>'Explore our curated ' . strtolower($name) . ' collection.',
         'image_url'=>'/assets/img/products/laptop.jpg','icon'=>$meta['icon'],'banner_url'=>'/assets/img/promo-wide.jpg',
         'seo_title'=>$name.' | AllStore','seo_description'=>'Shop '.$name.' at AllStore.',
         'sort_order'=>$sort++,'is_active'=>1,'is_featured'=>$sort <= 8 ? 1 : 0,'created_at'=>$now,'updated_at'=>$now]);
     foreach ($meta['children'] as $child) {
-        $cid = U(); $catIds[$child] = $cid;
-        row('categories', ['id'=>$cid,'parent_id'=>$id,'name'=>$child,'slug'=>Helpers::slugify($child),
+        $cid = allstore_seed_uuid(); $catIds[$child] = $cid;
+        allstore_seed_row('categories', ['id'=>$cid,'parent_id'=>$id,'name'=>$child,'slug'=>Helpers::slugify($child),
             'description'=>'Discover ' . strtolower($child) . '.','image_url'=>'/assets/img/products/headphones.jpg',
             'icon'=>$meta['icon'],'banner_url'=>'','seo_title'=>$child.' | AllStore','seo_description'=>'Shop '.$child,
             'sort_order'=>0,'is_active'=>1,'is_featured'=>0,'created_at'=>$now,'updated_at'=>$now]);
@@ -87,8 +100,8 @@ foreach ($categories as $name => $meta) {
 $brandNames = ['Aurora','Nord','Kanto','Meridian','Lumen','Terra','Vela','Atlas'];
 $brandIds = []; $i = 0;
 foreach ($brandNames as $b) {
-    $brandIds[$b] = U();
-    row('brands', ['id'=>$brandIds[$b],'name'=>$b,'slug'=>Helpers::slugify($b),'logo_url'=>'',
+    $brandIds[$b] = allstore_seed_uuid();
+    allstore_seed_row('brands', ['id'=>$brandIds[$b],'name'=>$b,'slug'=>Helpers::slugify($b),'logo_url'=>'',
         'description'=>$b.' designs considered objects for everyday life.','website'=>'',
         'is_active'=>1,'sort_order'=>$i++,'created_at'=>$now,'updated_at'=>$now]);
 }
@@ -102,23 +115,23 @@ $attributeDefs = [
 ];
 $attrIds = []; $valueIds = []; $ai = 0;
 foreach ($attributeDefs as $name => $def) {
-    $id = U(); $attrIds[$name] = $id;
-    row('attributes', ['id'=>$id,'name'=>$name,'slug'=>Helpers::slugify($name),'type'=>$def['type'],
+    $id = allstore_seed_uuid(); $attrIds[$name] = $id;
+    allstore_seed_row('attributes', ['id'=>$id,'name'=>$name,'slug'=>Helpers::slugify($name),'type'=>$def['type'],
         'unit'=>$def['unit'] ?? '', 'is_filterable'=>1,'sort_order'=>$ai++,'created_at'=>$now]);
     foreach ($def['values'] as $v=>$label) {
-        $vid = U(); $valueIds[$name.':'.$v] = $vid;
-        row('attribute_values', ['id'=>$vid,'attribute_id'=>$id,'value'=>$v,'label'=>$label,
+        $vid = allstore_seed_uuid(); $valueIds[$name.':'.$v] = $vid;
+        allstore_seed_row('attribute_values', ['id'=>$vid,'attribute_id'=>$id,'value'=>$v,'label'=>$label,
             'color_hex'=>in_array($v,['charcoal','ivory','sand','olive','silver','tan'],true) ? '#9a9186' : null,
             'sort_order'=>0]);
     }
 }
 foreach (['Electronics','Fashion & Clothing','Home & Living'] as $c) {
     foreach (['Color','Size','Material','Storage','RAM'] as $a) {
-        row('category_attributes', ['category_id'=>$catIds[$c],'attribute_id'=>$attrIds[$a],'is_filterable'=>1,'sort_order'=>0]);
+        allstore_seed_row('category_attributes', ['category_id'=>$catIds[$c],'attribute_id'=>$attrIds[$a],'is_filterable'=>1,'sort_order'=>0]);
     }
 }
-$warehouseId = U();
-row('warehouses', ['id'=>$warehouseId,'name'=>'Main Warehouse','code'=>'MAIN','address'=>'Central fulfilment','is_default'=>1,'is_active'=>1,'created_at'=>$now]);
+$warehouseId = allstore_seed_uuid();
+allstore_seed_row('warehouses', ['id'=>$warehouseId,'name'=>'Main Warehouse','code'=>'MAIN','address'=>'Central fulfilment','is_default'=>1,'is_active'=>1,'created_at'=>$now]);
 
 $img = [
     'headphones'=>'/assets/img/products/headphones.jpg','phone'=>'/assets/img/products/smartphone.jpg',
@@ -155,9 +168,9 @@ $products = [
 $productIds = []; $pIndex = 0;
 foreach ($products as $p) {
     [$name,$image,$cat,$brand,$price,$compare,$stock,$featured,$best,$new,$trend,$short] = $p;
-    $id = U(); $productIds[] = $id;
+    $id = allstore_seed_uuid(); $productIds[] = $id;
     $slug = Helpers::slugify($name);
-    row('products', [
+    allstore_seed_row('products', [
         'id'=>$id,'name'=>$name,'slug'=>$slug,'sku'=>'AS-'.str_pad((string)($pIndex+1),4,'0',STR_PAD_LEFT),
         'barcode'=>'0'.str_pad((string)(880000000000+$pIndex),12,'0',STR_PAD_LEFT),
         'category_id'=>$catIds[$cat],'brand_id'=>$brandIds[$brand],
@@ -172,16 +185,16 @@ foreach ($products as $p) {
     ]);
     $gallery = [$img[$image], $img[array_keys($img)[($pIndex+2)%8]], $img[array_keys($img)[($pIndex+5)%8]]];
     foreach ($gallery as $gi=>$gurl) {
-        row('product_images', ['id'=>U(),'product_id'=>$id,'url'=>$gurl,'alt'=>$name,'sort_order'=>$gi,'is_primary'=>$gi===0?1:0,'created_at'=>$now]);
+        allstore_seed_row('product_images', ['id'=>allstore_seed_uuid(),'product_id'=>$id,'url'=>$gurl,'alt'=>$name,'sort_order'=>$gi,'is_primary'=>$gi===0?1:0,'created_at'=>$now]);
     }
-    row('inventory', ['id'=>U(),'product_id'=>$id,'variant_id'=>'','warehouse_id'=>$warehouseId,
+    allstore_seed_row('inventory', ['id'=>allstore_seed_uuid(),'product_id'=>$id,'variant_id'=>'','warehouse_id'=>$warehouseId,
         'quantity'=>$stock,'reserved'=>0,'damaged'=>0,'available'=>$stock,'updated_at'=>$now]);
     // Dynamic attribute values (used by category filters).
     $colorKeys = ['charcoal','ivory','sand','olive','silver','tan'];
-    row('product_attribute_values', ['product_id'=>$id,'attribute_id'=>$attrIds['Color'],'value_id'=>$valueIds['Color:'.$colorKeys[$pIndex%6]],'value_text'=>null]);
-    row('product_attribute_values', ['product_id'=>$id,'attribute_id'=>$attrIds['Material'],'value_id'=>$valueIds['Material:'.['leather','cotton','aluminium','oak','glass'][$pIndex%5]],'value_text'=>null]);
+    allstore_seed_row('product_attribute_values', ['product_id'=>$id,'attribute_id'=>$attrIds['Color'],'value_id'=>$valueIds['Color:'.$colorKeys[$pIndex%6]],'value_text'=>null]);
+    allstore_seed_row('product_attribute_values', ['product_id'=>$id,'attribute_id'=>$attrIds['Material'],'value_id'=>$valueIds['Material:'.['leather','cotton','aluminium','oak','glass'][$pIndex%5]],'value_text'=>null]);
     if ($pIndex % 3 === 0) {
-        row('product_attribute_values', ['product_id'=>$id,'attribute_id'=>$attrIds['Size'],'value_id'=>$valueIds['Size:'.['s','m','l','xl'][$pIndex%4]],'value_text'=>null]);
+        allstore_seed_row('product_attribute_values', ['product_id'=>$id,'attribute_id'=>$attrIds['Size'],'value_id'=>$valueIds['Size:'.['s','m','l','xl'][$pIndex%4]],'value_text'=>null]);
     }
     // Variants for selected products.
     if (in_array($pIndex, [0,1,2,3,4], true)) {
@@ -193,7 +206,7 @@ foreach ($products as $p) {
             4=>[['Tan Leather','tan',0],['Steel Bracelet','silver',4000]],
         ];
         foreach ($variantSets[$pIndex] as $vi=>[$vname,$vslug,$delta]) {
-            row('product_variants', ['id'=>U(),'product_id'=>$id,'sku'=>'AS-'.($pIndex+1).'-V'.($vi+1),
+            allstore_seed_row('product_variants', ['id'=>allstore_seed_uuid(),'product_id'=>$id,'sku'=>'AS-'.($pIndex+1).'-V'.($vi+1),
                 'barcode'=>'','name'=>$vname,'options'=>Helpers::json(['variant'=>$vname]),
                 'price_cents'=>$price+$delta,'compare_cents'=>$compare+$delta,
                 'stock'=>max(3,(int)($stock/3)),'image_url'=>$img[$image],'is_active'=>1,
@@ -204,11 +217,11 @@ foreach ($products as $p) {
 }
 
 /* ---------------------------------------------------- CMS & homepage builder */
-$bannerId = U();
-row('banners', ['id'=>$bannerId,'title'=>'Objects worth keeping','subtitle'=>'A considered collection for everyday life',
+$bannerId = allstore_seed_uuid();
+allstore_seed_row('banners', ['id'=>$bannerId,'title'=>'Objects worth keeping','subtitle'=>'A considered collection for everyday life',
     'image_url'=>'/assets/img/hero-marketplace.jpg','mobile_image_url'=>'/assets/img/hero-marketplace.jpg',
     'link_url'=>'/shop','placement'=>'hero','sort_order'=>0,'starts_at'=>null,'expires_at'=>null,'is_active'=>1,'created_at'=>$now,'updated_at'=>$now]);
-row('banners', ['id'=>U(),'title'=>'The everyday edit','subtitle'=>'Up to 30% off selected essentials',
+allstore_seed_row('banners', ['id'=>allstore_seed_uuid(),'title'=>'The everyday edit','subtitle'=>'Up to 30% off selected essentials',
     'image_url'=>'/assets/img/promo-wide.jpg','mobile_image_url'=>'/assets/img/promo-wide.jpg',
     'link_url'=>'/deals','placement'=>'promo','sort_order'=>0,'starts_at'=>null,'expires_at'=>null,'is_active'=>1,'created_at'=>$now,'updated_at'=>$now]);
 $sections = [
@@ -225,15 +238,15 @@ $sections = [
     ['newsletter','Stay in the loop','New arrivals and member-only offers','{}',12],
 ];
 foreach ($sections as [$k,$t,$s,$cfg,$sort]) {
-    row('homepage_sections', ['id'=>U(),'section_key'=>$k,'title'=>$t,'subtitle'=>$s,'config'=>$cfg,
+    allstore_seed_row('homepage_sections', ['id'=>allstore_seed_uuid(),'section_key'=>$k,'title'=>$t,'subtitle'=>$s,'config'=>$cfg,
         'sort_order'=>$sort,'is_enabled'=>1,'starts_at'=>null,'expires_at'=>null,'created_at'=>$now,'updated_at'=>$now]);
 }
-$flashId = U();
-row('flash_sales', ['id'=>$flashId,'name'=>'Weekend Flash Sale','starts_at'=>gmdate('Y-m-d\TH:i:s\Z',time()-86400),
+$flashId = allstore_seed_uuid();
+allstore_seed_row('flash_sales', ['id'=>$flashId,'name'=>'Weekend Flash Sale','starts_at'=>gmdate('Y-m-d\TH:i:s\Z',time()-86400),
     'ends_at'=>gmdate('Y-m-d\TH:i:s\Z',time()+3*86400),'is_active'=>1,'created_at'=>$now]);
 foreach (array_slice($productIds,0,6) as $i=>$pid) {
     $prices = [24900,89900,129900,12900,21900,47900];
-    row('flash_sale_items', ['id'=>U(),'flash_sale_id'=>$flashId,'product_id'=>$pid,
+    allstore_seed_row('flash_sale_items', ['id'=>allstore_seed_uuid(),'flash_sale_id'=>$flashId,'product_id'=>$pid,
         'discount_percent'=>20,'sale_price_cents'=>(int)round($prices[$i]*0.8),'sort_order'=>$i]);
 }
 foreach ([
@@ -242,22 +255,22 @@ foreach ([
     ['FREESHIP','free_shipping',0,0,7500,0,0,0,1,1],
     ['FIRST15','percent',15,0,10000,3000,50,1,1,0],
 ] as [$code,$type,$pct,$val,$min,$max,$limit,$perUser,$first,$free]) {
-    row('coupons', ['id'=>U(),'code'=>$code,'type'=>$type,'percent'=>$pct,'value_cents'=>$val,
+    allstore_seed_row('coupons', ['id'=>allstore_seed_uuid(),'code'=>$code,'type'=>$type,'percent'=>$pct,'value_cents'=>$val,
         'min_order_cents'=>$min,'max_discount_cents'=>$max,'category_id'=>null,'product_id'=>null,
         'usage_limit'=>$limit,'per_user_limit'=>$perUser,'used_count'=>0,
         'starts_at'=>gmdate('Y-m-d\TH:i:s\Z',time()-86400),'expires_at'=>gmdate('Y-m-d\TH:i:s\Z',time()+90*86400),
         'first_order_only'=>$first,'free_shipping'=>$free,'is_active'=>1,'created_at'=>$now,'updated_at'=>$now]);
 }
-$zone = U();
-row('shipping_zones', ['id'=>$zone,'name'=>'United States','countries'=>Helpers::json(['US','*']),'regions'=>'[]','cities'=>'[]','is_active'=>1,'sort_order'=>0,'created_at'=>$now]);
-row('shipping_rates', ['id'=>U(),'zone_id'=>$zone,'name'=>'Standard Delivery','method'=>'standard','min_weight_grams'=>0,
+$zone = allstore_seed_uuid();
+allstore_seed_row('shipping_zones', ['id'=>$zone,'name'=>'United States','countries'=>Helpers::json(['US','*']),'regions'=>'[]','cities'=>'[]','is_active'=>1,'sort_order'=>0,'created_at'=>$now]);
+allstore_seed_row('shipping_rates', ['id'=>allstore_seed_uuid(),'zone_id'=>$zone,'name'=>'Standard Delivery','method'=>'standard','min_weight_grams'=>0,
     'max_weight_grams'=>0,'min_order_cents'=>0,'cost_cents'=>799,'free_above_cents'=>7500,
     'estimated_days_min'=>3,'estimated_days_max'=>6,'is_active'=>1,'created_at'=>$now]);
-row('shipping_rates', ['id'=>U(),'zone_id'=>$zone,'name'=>'Express Delivery','method'=>'express','min_weight_grams'=>0,
+allstore_seed_row('shipping_rates', ['id'=>allstore_seed_uuid(),'zone_id'=>$zone,'name'=>'Express Delivery','method'=>'express','min_weight_grams'=>0,
     'max_weight_grams'=>0,'min_order_cents'=>0,'cost_cents'=>1499,'free_above_cents'=>0,
     'estimated_days_min'=>1,'estimated_days_max'=>2,'is_active'=>1,'created_at'=>$now]);
 foreach ([['AllStore Express','ASE','https://tracking.example.com/%s'],['ParcelCo','PARCEL','https://parcel.example.com/track/%s']] as [$n,$c,$t]) {
-    row('couriers', ['id'=>U(),'name'=>$n,'code'=>$c,'tracking_url_template'=>$t,'api_base'=>'','is_active'=>1,'created_at'=>$now]);
+    allstore_seed_row('couriers', ['id'=>allstore_seed_uuid(),'name'=>$n,'code'=>$c,'tracking_url_template'=>$t,'api_base'=>'','is_active'=>1,'created_at'=>$now]);
 }
 $pageTexts = [
     'about'=>['About AllStore','AllStore is a modern marketplace built around a simple idea: everyday objects should be useful, well made and easy to find. We work with independent makers and established brands to bring a considered selection into one place.\n\nOur team checks every product for quality, packaging and accuracy before it reaches the store. We keep the experience calm and uncluttered, with clear pricing, honest descriptions and straightforward returns.'],
@@ -268,7 +281,7 @@ $pageTexts = [
     'shipping'=>['Shipping Policy','Orders are packed at our main warehouse. Standard delivery takes 3–6 business days and express delivery 1–2 business days. Shipping is complimentary on orders over $75. Tracking details are added to your account once a parcel is handed to the courier.'],
 ];
 foreach ($pageTexts as $slug=>[$title,$body]) {
-    row('pages', ['id'=>U(),'slug'=>$slug,'title'=>$title,'body'=>$body,'seo_title'=>$title.' | AllStore',
+    allstore_seed_row('pages', ['id'=>allstore_seed_uuid(),'slug'=>$slug,'title'=>$title,'body'=>$body,'seo_title'=>$title.' | AllStore',
         'seo_description'=>mb_substr($body,0,150),'is_published'=>1,'created_at'=>$now,'updated_at'=>$now]);
 }
 $faqs = [
@@ -281,7 +294,7 @@ $faqs = [
     ['Can I order without an account?','Yes, guest checkout is supported. Creating an account lets you track orders and save addresses.','account'],
     ['When will I get my refund?','After a return is approved and received, refunds are processed by the payment provider. The status is shown in your account.','returns'],
 ];
-foreach ($faqs as $i=>[$q,$a,$c]) { row('faqs', ['id'=>U(),'question'=>$q,'answer'=>$a,'category'=>$c,'sort_order'=>$i,'is_published'=>1,'created_at'=>$now]); }
+foreach ($faqs as $i=>[$q,$a,$c]) { allstore_seed_row('faqs', ['id'=>allstore_seed_uuid(),'question'=>$q,'answer'=>$a,'category'=>$c,'sort_order'=>$i,'is_published'=>1,'created_at'=>$now]); }
 $blogs = [
     ['A considered desk setup','Small changes that make a workspace calmer and more useful.','The best desk is the one you forget about. Start with a single good light, a keyboard that feels right and one object that makes the space yours.','/assets/img/promo-wide.jpg'],
     ['Materials that age well','Why leather, oak and brushed steel are worth the wait.','Patina is not damage; it is a record of use. We look at three materials that get better with time and how to care for them.','/assets/img/products/watch.jpg'],
@@ -289,7 +302,7 @@ $blogs = [
     ['Packing for a long weekend','A short list of things that earn their place.','The trick is to choose layers, not extras. A weekender, one pair of shoes, a watch and something to read.','/assets/img/hero-marketplace.jpg'],
 ];
 foreach ($blogs as $i=>[$t,$e,$b,$image]) {
-    row('blogs', ['id'=>U(),'slug'=>Helpers::slugify($t),'title'=>$t,'excerpt'=>$e,'body'=>$b,
+    allstore_seed_row('blogs', ['id'=>allstore_seed_uuid(),'slug'=>Helpers::slugify($t),'title'=>$t,'excerpt'=>$e,'body'=>$b,
         'image_url'=>$image,'author'=>'AllStore Editorial','is_published'=>1,
         'published_at'=>gmdate('Y-m-d\TH:i:s\Z',time()-($i+1)*7*86400),
         'seo_title'=>$t.' | AllStore Journal','seo_description'=>$e,'created_at'=>$now,'updated_at'=>$now]);
@@ -301,8 +314,8 @@ foreach ($blogs as $i=>[$t,$e,$b,$image]) {
 // sign in as them; real accounts must be created through /register.
 $demoUsers = [];
 foreach (['Casey Morgan','Riley Chen'] as $n) {
-    $uid = U(); $demoUsers[] = $uid;
-    row('profiles', ['id'=>$uid,'email'=>strtolower(str_replace(' ','.',$n)).'@example.test',
+    $uid = allstore_seed_uuid(); $demoUsers[] = $uid;
+    allstore_seed_row('profiles', ['id'=>$uid,'email'=>strtolower(str_replace(' ','.',$n)).'@example.test',
         'password_hash'=>password_hash(bin2hex(random_bytes(24)), PASSWORD_DEFAULT),
         'full_name'=>$n,'phone'=>'+1 555 010 0000','role_id'=>$roleIds['customer'],'status'=>'active',
         'email_verified'=>1,'newsletter_opt_in'=>0,'created_at'=>gmdate('Y-m-d\TH:i:s\Z',time()-40*86400),'updated_at'=>$now]);
@@ -317,7 +330,7 @@ $reviewTexts = [
 ];
 foreach ($reviewTexts as $i=>[$rating,$title,$body]) {
     $pid = $productIds[$i % 8];
-    row('reviews', ['id'=>U(),'product_id'=>$pid,'user_id'=>$demoUsers[$i%2],'order_id'=>null,
+    allstore_seed_row('reviews', ['id'=>allstore_seed_uuid(),'product_id'=>$pid,'user_id'=>$demoUsers[$i%2],'order_id'=>null,
         'rating'=>$rating,'title'=>$title,'body'=>$body,'image_urls'=>'[]','is_verified'=>0,'status'=>'approved',
         'admin_reply'=>null,'report_count'=>0,'created_at'=>gmdate('Y-m-d\TH:i:s\Z',time()-($i+2)*86400),'updated_at'=>$now]);
 }
@@ -328,12 +341,12 @@ foreach (array_unique(array_slice($productIds,0,8)) as $pid) {
 // Sample orders for dashboard analytics (seed data, not fabricated runtime state).
 $statuses = ['delivered','delivered','shipped','processing','pending'];
 foreach ($statuses as $oi=>$status) {
-    $oid = U(); $num = 'AS-' . gmdate('Ymd', time()-($oi+1)*86400) . '-SEED' . $oi;
+    $oid = allstore_seed_uuid(); $num = 'AS-' . gmdate('Ymd', time()-($oi+1)*86400) . '-SEED' . $oi;
     $pid = $productIds[($oi*3) % count($productIds)];
     $p = Database::first('SELECT name,sku,price_cents FROM products WHERE id=:i', ['i'=>$pid]);
     $qty = $oi % 2 + 1; $subtotal = (int)$p['price_cents'] * $qty;
     $placed = gmdate('Y-m-d\TH:i:s\Z', time()-($oi+1)*86400);
-    row('orders', ['id'=>$oid,'order_number'=>$num,'user_id'=>$demoUsers[$oi%2],'guest_email'=>null,
+    allstore_seed_row('orders', ['id'=>$oid,'order_number'=>$num,'user_id'=>$demoUsers[$oi%2],'guest_email'=>null,
         'status'=>$status,'payment_status'=>$status === 'pending' ? 'pending' : 'paid','payment_method'=>$oi%2 ? 'cod' : 'stripe',
         'shipping_method'=>'standard','subtotal_cents'=>$subtotal,'discount_cents'=>0,'shipping_cents'=>799,
         'tax_cents'=>0,'total_cents'=>$subtotal+799,'coupon_id'=>null,'coupon_code'=>null,'currency'=>'USD',
@@ -342,15 +355,15 @@ foreach ($statuses as $oi=>$status) {
         'shipping_address'=>Helpers::json(['full_name'=>'Demo','line1'=>'24 Market Street','city'=>'San Francisco','country'=>'US']),
         'billing_address'=>null,'customer_note'=>null,'idempotency_key'=>'seed-'.$oi,'ip_address'=>'127.0.0.1',
         'user_agent'=>'seed','placed_at'=>$placed,'created_at'=>$placed,'updated_at'=>$placed]);
-    row('order_items', ['id'=>U(),'order_id'=>$oid,'product_id'=>$pid,'variant_id'=>'','name'=>$p['name'],'sku'=>$p['sku'],
+    allstore_seed_row('order_items', ['id'=>allstore_seed_uuid(),'order_id'=>$oid,'product_id'=>$pid,'variant_id'=>'','name'=>$p['name'],'sku'=>$p['sku'],
         'image_url'=>'','options'=>'{}','unit_price_cents'=>(int)$p['price_cents'],'quantity'=>$qty,
         'discount_cents'=>0,'tax_cents'=>0,'total_cents'=>$subtotal,'created_at'=>$placed]);
-    row('order_status_history', ['id'=>U(),'order_id'=>$oid,'from_status'=>null,'to_status'=>'pending','note'=>'Seed','changed_by'=>null,'created_at'=>$placed]);
-    row('payments', ['id'=>U(),'order_id'=>$oid,'provider'=>$oi%2?'cod':'stripe','method'=>$oi%2?'cod':'stripe',
+    allstore_seed_row('order_status_history', ['id'=>allstore_seed_uuid(),'order_id'=>$oid,'from_status'=>null,'to_status'=>'pending','note'=>'Seed','changed_by'=>null,'created_at'=>$placed]);
+    allstore_seed_row('payments', ['id'=>allstore_seed_uuid(),'order_id'=>$oid,'provider'=>$oi%2?'cod':'stripe','method'=>$oi%2?'cod':'stripe',
         'status'=>$status === 'pending'?'pending':'paid','amount_cents'=>$subtotal+799,'currency'=>'USD',
         'transaction_ref'=>'seed','created_at'=>$placed,'updated_at'=>$placed]);
-    row('shipments', ['id'=>U(),'order_id'=>$oid,'status'=>$status==='delivered'?'delivered':'pending',
+    allstore_seed_row('shipments', ['id'=>allstore_seed_uuid(),'order_id'=>$oid,'status'=>$status==='delivered'?'delivered':'pending',
         'estimated_delivery'=>gmdate('Y-m-d\TH:i:s\Z',time()+3*86400),'created_at'=>$placed,'updated_at'=>$placed]);
-    row('invoices', ['id'=>U(),'order_id'=>$oid,'invoice_number'=>'INV-'.$num,'created_at'=>$placed]);
+    allstore_seed_row('invoices', ['id'=>allstore_seed_uuid(),'order_id'=>$oid,'invoice_number'=>'INV-'.$num,'created_at'=>$placed]);
 }
-fwrite(STDOUT, "Seed complete: " . count($productIds) . " products, " . count($catIds) . " categories, " . count($brandIds) . " brands.\n");
+allstore_seed_output("Seed complete: " . count($productIds) . " products, " . count($catIds) . " categories, " . count($brandIds) . " brands.\n");

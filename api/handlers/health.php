@@ -18,7 +18,7 @@ try {
     $connected = (bool)Database::value('SELECT 1');
     if ($connected) {
         $schema = Database::driver() === 'pgsql'
-            ? (bool)Database::value("SELECT to_regclass('public.sessions') IS NOT NULL")
+            ? (int)Database::value("SELECT CASE WHEN to_regclass('public.sessions') IS NOT NULL THEN 1 ELSE 0 END") === 1
             : (bool)Database::value("SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'");
     }
 } catch (\Throwable) {
