@@ -12,18 +12,16 @@ use AllStore\Core\Database;
 use AllStore\Core\Helpers;
 use AllStore\Core\Config;
 
-if (PHP_SAPI !== 'cli' && !defined('ALLSTORE_SETUP_CONTEXT')) { http_response_code(403); exit('CLI only.'); }
+if (PHP_SAPI !== 'cli') { http_response_code(403); exit('CLI only.'); }
 if (!function_exists('allstore_seed_output')) {
     function allstore_seed_output(string $line): void
     {
-        if (defined('ALLSTORE_SETUP_CONTEXT')) { $GLOBALS['allstore_setup_log'][] = $line; }
-        else { fwrite(STDOUT, $line); }
+        fwrite(STDOUT, $line);
     }
 }
 $force = in_array('--force', $argv ?? [], true);
 if (!$force && Database::value("SELECT value FROM settings WHERE key='seeded_v1'") === '1') {
     allstore_seed_output("Already seeded. Use --force to reseed.\n");
-    if (defined('ALLSTORE_SETUP_CONTEXT')) { return; }
     exit(0);
 }
 if ($force) {

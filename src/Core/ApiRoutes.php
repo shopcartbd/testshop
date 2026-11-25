@@ -51,7 +51,6 @@ final class ApiRoutes
             'admin/health' => 'health.php',
             'health' => 'health.php',
             'webhooks/stripe' => 'webhook-stripe.php',
-            'setup/bootstrap' => 'setup-bootstrap.php',
         ];
     }
 }

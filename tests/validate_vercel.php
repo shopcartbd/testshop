@@ -29,6 +29,8 @@ $config = $read('src/Core/Config.php');
 $bootstrap = $read('includes/bootstrap.php');
 $health = $read('api/handlers/health.php');
 $leastPrivilege = $read('database/migrations/004_least_privilege.sql');
+$apiRoutes = $read('src/Core/ApiRoutes.php');
+$setupHandler = $read('api/handlers/setup-bootstrap.php');
 
 // Container image / build shape.
 $check($docker !== '' && $dockerVercel !== '', 'Dockerfile + Dockerfile.vercel exist');
@@ -65,10 +67,10 @@ $check(str_contains($logger, "Config::get('app.env') === 'production'") && str_c
 $check(str_contains($request, "explode(',', \$proto)") && str_contains($request, 'HTTP_FORWARDED'), 'Forwarded-proto chains and RFC 7239 Forwarded are handled');
 $check(str_contains($config, 'SUPABASE_DB_URL') && str_contains($config, 'POSTGRES_URL'), 'Config accepts Supabase/Vercel DSN aliases');
 $check(str_contains($config, 'VERCEL_ENV') && str_contains($config, 'VERCEL_URL'), 'Config accepts Vercel env/url fallbacks');
-$check(str_contains($config, 'overrideDatabaseUrl') && str_contains($config, 'withDatabaseUser'), 'Config supports a transient setup-only DSN role override');
-$check(str_contains($database, 'function reset'), 'Database supports dropping its cached PDO connection for setup');
+$check(!str_contains($config, 'overrideDatabaseUrl') && !str_contains($config, 'withDatabaseUser') && !str_contains($database, 'function reset'), 'No transient setup-only DB override remains');
+$check(!str_contains($apiRoutes, 'setup/bootstrap') && $setupHandler === '', 'Temporary setup bootstrap route is removed');
 $check(str_contains($config, 'supabaseUrl') && str_contains($config, 'supabase.co'), 'Supabase project URL can be derived from a DB URI');
-$check(str_contains($bootstrap, "/api/health") && str_contains($bootstrap, '$isHealthCheck'), 'Health check bypasses DB-backed session bootstrap');
+$check(str_contains($bootstrap, "/api/health") && str_contains($bootstrap, '$isHealthCheck') && !str_contains($bootstrap, '/api/setup/'), 'Only health checks bypass DB-backed session bootstrap');
 $check(str_contains($health, 'schema_ready') && str_contains($health, 'database_connected') && str_contains($health, 'db_source'), 'Health endpoint reports sanitized DB/schema diagnostics');
 $check(str_contains($health, 'db_can_create_public') && str_contains($health, 'db_public_schema_owner') && str_contains($health, 'db_public_tables'), 'Health endpoint reports sanitized PostgreSQL privilege diagnostics');
 $check(!str_contains($health, 'current_user()'), 'Health uses the PostgreSQL current_user keyword, not invalid function syntax');

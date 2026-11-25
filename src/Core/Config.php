@@ -6,7 +6,6 @@ final class Config
 {
     private static array $c = [];
     private static string $databaseUrlSource = 'none';
-    private static ?string $dbUrlOverride = null;
 
     public static function init(): void
     {
@@ -96,37 +95,9 @@ final class Config
     /** Name of the env var that supplied the DSN; diagnostics only. */
     public static function databaseUrlSource(): string { return self::$databaseUrlSource; }
 
-    /**
-     * Temporarily point the already-initialised DB config at a connection URI.
-     * Used only by the token-protected one-time setup route, never persisted.
-     */
-    public static function overrideDatabaseUrl(?string $url): void
-    {
-        self::$dbUrlOverride = ($url !== null && $url !== '') ? $url : null;
-        if (!isset(self::$c['db']) || (string)self::$c['db']['driver'] !== 'pgsql') { return; }
-        self::$c['db']['dsn'] = static::buildDsn('pgsql');
-        self::$c['db']['user'] = static::dbUser();
-        self::$c['db']['password'] = static::dbPassword();
-        self::$c['db']['pool_mode'] = 'session';
-    }
-
-    /** Build a PostgreSQL URI with a different login role but the same secret. */
-    public static function withDatabaseUser(string $url, string $newUser): ?string
-    {
-        $p = static::parseDbUrl($url);
-        if (!is_array($p) || $newUser === '') { return null; }
-        return sprintf('postgresql://%s:%s@%s:%d/%s?sslmode=%s',
-            rawurlencode($newUser), rawurlencode($p['pass']),
-            $p['host'], $p['port'], rawurlencode($p['dbname']), $p['ssl']);
-    }
-
     /** Accepted DSN aliases, in priority order. Only PostgreSQL URIs qualify. */
     private static function databaseUrl(): string
     {
-        if (self::$dbUrlOverride !== null) {
-            self::$databaseUrlSource = 'setup_override';
-            return self::$dbUrlOverride;
-        }
         $candidates = ['DATABASE_URL', 'SUPABASE_DB_URL', 'POSTGRES_URL', 'POSTGRES_URL_NON_POOLING'];
         foreach ($candidates as $key) {
             $v = Env::get($key, '') ?: '';
