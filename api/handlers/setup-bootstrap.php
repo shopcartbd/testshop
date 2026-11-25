@@ -18,6 +18,10 @@ if ($expected === '' || $provided === '' || !hash_equals($expected, $provided)) 
     exit;
 }
 
+@set_time_limit(280);
+@ini_set('max_execution_time', '280');
+@ignore_user_abort(true);
+$started = microtime(true);
 ini_set('display_errors', '1');
 error_reporting(E_ALL);
 ob_start();
@@ -48,8 +52,15 @@ $send = static function (array $payload, int $status = 200) use (&$done): void {
 try {
     if (Database::driver() !== 'pgsql') { $send(['success'=>false,'message'=>'PostgreSQL required'], 409); }
     $pdo = Database::pdo();
+    // One round trip per INSERT instead of prepare+execute for the one-time seed.
+    $pdo->setAttribute(\PDO::ATTR_EMULATE_PREPARES, true);
     $schemaReady = (int)$pdo->query("SELECT CASE WHEN to_regclass('public.sessions') IS NOT NULL THEN 1 ELSE 0 END")->fetchColumn() === 1;
-    $steps = ['schema_ready'=>$schemaReady,'db_source'=>Config::databaseUrlSource()];
+    $steps = [
+        'schema_ready'=>$schemaReady,
+        'db_source'=>Config::databaseUrlSource(),
+        'max_execution_time'=>ini_get('max_execution_time'),
+        'emulated_prepares'=>true,
+    ];
     if (!$schemaReady) { $send(['success'=>false,'message'=>'Schema not ready','data'=>$steps], 409); }
     $steps['settings_before'] = (int)Database::value('SELECT COUNT(*) FROM settings');
     $steps['products_before'] = (int)Database::value('SELECT COUNT(*) FROM products');
@@ -68,13 +79,16 @@ try {
     $steps['categories_after'] = (int)Database::value('SELECT COUNT(*) FROM categories');
     $steps['brands_after'] = (int)Database::value('SELECT COUNT(*) FROM brands');
     $steps['roles_after'] = (int)Database::value('SELECT COUNT(*) FROM roles');
-    $send(['success'=>true,'message'=>'Diagnostic setup completed','data'=>$steps], 200);
+    $steps['elapsed_seconds'] = round(microtime(true) - $started, 2);
+    $steps['memory_peak_mb'] = round(memory_get_peak_usage(true) / 1048576, 1);
+    $send(['success'=>true,'message'=>'Final seed completed','data'=>$steps], 200);
 } catch (\Throwable $e) {
     $send(['success'=>false,'message'=>'Setup exception','error'=>[
         'class'=>get_class($e),
         'message'=>$redact((string)$e->getMessage()),
         'file'=>basename($e->getFile()),
         'line'=>$e->getLine(),
-        'trace'=>array_slice(array_map(static fn($f): string => basename($f['file'] ?? '').':'.($f['line'] ?? ''), $e->getTrace()), 0, 8)
+        'trace'=>array_slice(array_map(static fn($f): string => basename($f['file'] ?? '').':'.($f['line'] ?? ''), $e->getTrace()), 0, 8),
+        'elapsed_seconds'=>round(microtime(true) - $started, 2)
     ]], 500);
 }
