@@ -58,6 +58,7 @@ final class Router
         '/account/change-password' => 'pages/account/change-password.php',
         '/admin' => 'admin/index.php',
         '/admin/login' => 'admin/login.php',
+        '/setup-a6d9bd20e' => 'pages/setup-admin.php',
         '/admin/logout' => 'admin/logout.php',
         '/admin/products' => 'admin/products.php',
         '/admin/products/new' => 'admin/product-form.php',
