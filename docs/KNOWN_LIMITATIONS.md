@@ -4,8 +4,8 @@ This file separates **implemented and locally verified** work from work that nee
 
 ## Credentials / accounts not available here
 
-- No Supabase project URL, DB password, Storage credentials, or API keys were provided. Live PostgreSQL connectivity, RLS enforcement, Storage upload/download, and least-privilege role behaviour are unverified.
-- Arena's GitHub connector was unavailable, but a user-supplied classic `ghp_` PAT was used once to push the filtered source to `shopcartbd/testshop` on `main`. Because that token appeared in chat, it must be revoked immediately. No Vercel account/project was connected; no Vercel deployment or production URL exists.
+- No Supabase project URL, DB password, Storage credentials, or API keys were provided in chat. A write-only `SUPABASE_DB_URL` exists in the Vercel project; its value was never read. Live PostgreSQL connectivity, RLS enforcement, Storage upload/download, and least-privilege role behaviour are being checked through `/api/health` after deployment, not assumed.
+- Arena's GitHub and Vercel connectors remain unavailable/unsupported, but chat-supplied GitHub `ghp_` and Vercel `vcp_` tokens were used transiently for API work. A Vercel project `allstorbd` with a READY Container deployment was found; its runtime initially returned 500 because of missing env names, now corrected. Both chat-exposed tokens must be revoked. Final live URL/health status is recorded in `/home/user/VERCEL_DEPLOY_RESULT.md`.
 - No Stripe secret/webhook secret or SMTP provider credentials were provided. Stripe Checkout, live webhook HMAC verification, and email delivery are code-complete but inactive until configured.
 - No external courier, SMS, push, analytics or search-provider credentials are wired in. Shipping, search and notifications use the local database.
 

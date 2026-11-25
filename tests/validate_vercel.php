@@ -25,6 +25,9 @@ $gitignore = $read('.gitignore');
 $database = $read('src/Core/Database.php');
 $logger = $read('src/Core/Logger.php');
 $request = $read('src/Core/Request.php');
+$config = $read('src/Core/Config.php');
+$bootstrap = $read('includes/bootstrap.php');
+$health = $read('api/handlers/health.php');
 
 // Container image / build shape.
 $check($docker !== '' && $dockerVercel !== '', 'Dockerfile + Dockerfile.vercel exist');
@@ -59,6 +62,12 @@ $check(!str_contains($database, 'SET NAMES'), 'No session-level SET NAMES on the
 $check(str_contains($database, 'ATTR_EMULATE_PREPARES') && str_contains($database, 'pool_mode'), 'Emulated prepares follow DB_POOL_MODE');
 $check(str_contains($logger, "Config::get('app.env') === 'production'") && str_contains($logger, 'error_log('), 'Production logging uses stderr only');
 $check(str_contains($request, "explode(',', \$proto)") && str_contains($request, 'HTTP_FORWARDED'), 'Forwarded-proto chains and RFC 7239 Forwarded are handled');
+$check(str_contains($config, 'SUPABASE_DB_URL') && str_contains($config, 'POSTGRES_URL'), 'Config accepts Supabase/Vercel DSN aliases');
+$check(str_contains($config, 'VERCEL_ENV') && str_contains($config, 'VERCEL_URL'), 'Config accepts Vercel env/url fallbacks');
+$check(str_contains($config, 'supabaseUrl') && str_contains($config, 'supabase.co'), 'Supabase project URL can be derived from a DB URI');
+$check(str_contains($bootstrap, "/api/health") && str_contains($bootstrap, '$isHealthCheck'), 'Health check bypasses DB-backed session bootstrap');
+$check(str_contains($health, 'schema_ready') && str_contains($health, 'database_connected') && str_contains($health, 'db_source'), 'Health endpoint reports sanitized DB/schema diagnostics');
+$check(!str_contains($health, 'Config::all()') && !str_contains($health, 'password'), 'Health endpoint does not echo environment values');
 $check(is_file($root . '/scripts/vercel_preflight.php'), 'Vercel preflight script is present');
 $check(is_file($root . '/vercel.vercel-php.example.json'), 'Archived community-runtime fallback is kept separate');
 

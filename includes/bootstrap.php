@@ -52,6 +52,11 @@ set_error_handler(static function (int $severity, string $message, string $file,
 });
 
 Security::sendHeaders();
-Session::start();
-Session::prune();
+// /api/health must be able to report database/schema problems without first
+// requiring a sessions table. All other routes keep DB-backed sessions.
+$isHealthCheck = PHP_SAPI !== 'cli' && str_starts_with(Request::path(), '/api/health');
+if (!$isHealthCheck) {
+    Session::start();
+    Session::prune();
+}
 if (Config::get('app.debug')) { Response::noCache(); }

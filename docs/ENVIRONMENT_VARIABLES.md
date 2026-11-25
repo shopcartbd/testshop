@@ -34,6 +34,8 @@ All variables are read by `src/Core/Env.php` and mapped in `src/Core/Config.php`
 
 `001_schema.sql` is portable PostgreSQL 15+/SQLite 3.35+ DDL. `002_rls.sql` and `004_least_privilege.sql` are PostgreSQL/Supabase-specific. Replace the placeholder password in `004_least_privilege.sql` manually before running it; never commit the replacement.
 
+**Vercel / Supabase alias support (added 2026-11-25):** `Config.php` also accepts `SUPABASE_DB_URL`, `POSTGRES_URL` and `POSTGRES_URL_NON_POOLING` as `DATABASE_URL`; `VERCEL_ENV=production` as `APP_ENV`; `VERCEL_URL` as an `APP_URL` fallback when `APP_URL` is missing/localhost; and it derives `SUPABASE_URL` from a Supabase DB URI when no explicit URL is supplied. `SESSION_DRIVER` is a common platform variable but is ignored — sessions are always DB-backed. These are aliases/fallbacks, not a replacement for a real PostgreSQL DSN.
+
 ## Supabase Storage and optional REST
 
 | Variable | Required | Notes |

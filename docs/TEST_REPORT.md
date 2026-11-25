@@ -14,7 +14,7 @@
 | HTTP smoke test | Python 3 standard library, no external packages |
 | Composer | Not required; no Composer dependencies |
 | Static checks | `tests/static_bootstrap.php` provides only the class autoloader; no `.env`, database, session, cookie or header setup |
-| Vercel checks | `tests/validate_vercel.php` (static config guard) and `scripts/vercel_preflight.php` (env/extension preflight); no live deployment |
+| Vercel checks | `tests/validate_vercel.php` (static config guard) and `scripts/vercel_preflight.php` (env/extension preflight); live deployment verification is recorded separately in `/home/user/VERCEL_DEPLOY_RESULT.md` |
 
 ## Commands executed and results
 
@@ -27,13 +27,14 @@
 | JS syntax | `node --check assets/js/*.js` | **3/3 passed** |
 | Python test syntax | `python3 -m py_compile tests/smoke.py` | passed |
 | Static class imports | `php tests/validate_classes.php` | scanned **187 PHP files**; all static class references resolve |
-| Route/handler/method validation | `php tests/validate.php` | **593 static checks**; 44 API routes, 90 page routes, 44 handler files; passed |
+| Route/handler/method validation | `php tests/validate.php` | **607 static checks**; 44 API routes, 90 page routes, 44 handler files; passed |
 | JSON config | `python3 -m json.tool vercel.json` and `vercel.vercel-php.example.json` | valid |
-| Vercel static readiness | `php tests/validate_vercel.php` | **28 checks**, passed |
+| Vercel static readiness | `php tests/validate_vercel.php` | **34 checks**, passed; includes DSN aliases, Vercel fallbacks and sanitized health diagnostics |
 | Vercel preflight (local, dummy env) | `php scripts/vercel_preflight.php` | all config checks passed; correctly flags 3 sandbox-only missing extensions (`intl`, `zip`, `opcache`) that the Dockerfile installs |
 | Static verification wrapper | `SKIP_SMOKE=1 bash tests/run.sh` | passed (PHP/JS/Python syntax, class/route/Vercel validators, JSON) |
 | Fresh-clone static wrapper | `SKIP_SMOKE=1 bash tests/run.sh` in a clone with no `.env`/SQLite | passed after adding `tests/static_bootstrap.php`; no 500 HTML |
 | Local HTTP smoke test | `ADMIN_PASSWORD=... python3 tests/smoke.py` | **71 checks, 0 failures** |
+| Local health diagnostics | `GET /api/health` | `status=ok`, `database=local`, `schema_ready=true`, sanitized `config` block; no secret values |
 
 ## HTTP smoke test coverage
 
@@ -55,7 +56,7 @@ Actual browser screenshots were captured with headless Chromium 156 and Playwrig
 
 ## Defects found and fixed during verification
 
-The first full HTTP sweep exposed three real runtime defects: missing `use AllStore\Core\Helpers;` imports in `admin/brands.php`, `admin/coupons.php`, and `admin/reviews.php`. A token-based static validator (`tests/validate_classes.php`) was added to catch this class of bug, and the imports were fixed. An ambiguous SQL fixture in the smoke test was also corrected so `/admin/customers/{id}` receives a real profile id. A later Chromium capture found that the standalone `admin/login.php` used `icon()` without loading `includes/components.php`; the import and a guest-login regression check were added. Post-push verification on a clean GitHub clone showed that `validate.php` and `validate_classes.php` unnecessarily loaded the full application bootstrap and emitted a 500 page when `.env`/SQLite were absent; both now use `tests/static_bootstrap.php`, which registers only the autoloader. A later Vercel-readiness audit found six deployment risks (production file logging, session-level `SET NAMES` on the Supabase pooler, strict `X-Forwarded-Proto` parsing, `immutable` caching of unversioned assets, a floating Alpine base image, and no preflight guard); all were fixed and are now covered by `tests/validate_vercel.php`. See `VERCEL_READINESS.md`.
+The first full HTTP sweep exposed three real runtime defects: missing `use AllStore\Core\Helpers;` imports in `admin/brands.php`, `admin/coupons.php`, and `admin/reviews.php`. A token-based static validator (`tests/validate_classes.php`) was added to catch this class of bug, and the imports were fixed. An ambiguous SQL fixture in the smoke test was also corrected so `/admin/customers/{id}` receives a real profile id. A later Chromium capture found that the standalone `admin/login.php` used `icon()` without loading `includes/components.php`; the import and a guest-login regression check were added. Post-push verification on a clean GitHub clone showed that `validate.php` and `validate_classes.php` unnecessarily loaded the full application bootstrap and emitted a 500 page when `.env`/SQLite were absent; both now use `tests/static_bootstrap.php`, which registers only the autoloader. A later Vercel-readiness audit found six deployment risks (production file logging, session-level `SET NAMES` on the Supabase pooler, strict `X-Forwarded-Proto` parsing, `immutable` caching of unversioned assets, a floating Alpine base image, and no preflight guard); all were fixed and are now covered by `tests/validate_vercel.php`. A follow-up live Vercel API diagnosis found the project `allstorbd` with a READY Container deployment but only three env vars (`APP_URL`, `SESSION_DRIVER`, `SUPABASE_DB_URL`); missing `APP_KEY`/`DB_DRIVER`/`DATABASE_URL` caused a runtime 500. Config now accepts Supabase/Vercel DSN aliases and Vercel fallbacks, `/api/health` bypasses session bootstrap and reports sanitized DB/schema state, and the missing production env names were set through the Vercel API. See `VERCEL_READINESS.md` and the workspace report `VERCEL_DEPLOY_RESULT.md`.
 
 Earlier code review and runtime work also fixed: checkout idempotency key replay/ownership and rotated keys; the nullable cart id used after checkout; profile flash messages after redirect; password-change session invalidation and CSRF token refresh; support-ticket lookup by ticket number; admin header RBAC defence in depth; static-file exposure in `router.php`; and Caddy/Container configuration alignment.
 

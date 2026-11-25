@@ -71,14 +71,27 @@ php scripts/vercel_preflight.php
 
 It prints presence/absence only — never secret values. Exit `0` = ready; exit `1` = fix the listed failures.
 
-## Still required by you (cannot be done in this workspace)
+## Live Vercel API diagnosis — 2026-11-25
 
-1. **Connect/import Vercel.** Arena's Vercel connector is `disconnected`; no Vercel account, project, token or CLI session is available here. Import `shopcartbd/testshop` in the Vercel dashboard, or connect the app / run `vercel link && vercel deploy --prod` yourself. If auto-detection misses it: `vercel project update --framework container --yes`.
-2. **Set Vercel env vars** (minimum): `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://…`, `APP_KEY`, `DB_DRIVER=pgsql`, `DATABASE_URL` (6543 + `sslmode=require`), `DB_POOL_MODE=transaction`. Do **not** set `PORT` manually.
-3. **Prepare Supabase:** create project, apply `database/migrations/001…004` in order from a trusted SQL client (replace the placeholder password in `004`), create Storage buckets/policies, then bootstrap the first admin with `scripts/bootstrap_admin.php`.
-4. **Build/test the container** for real: `docker build`, `vercel dev --local` (needs Docker), then check `/api/health`, `/`, `/admin/login`, `/.env` → 404, and HSTS/CSP on the public HTTPS domain.
-5. **Optional integrations:** `SUPABASE_URL` + server-side secret, `MAIL_*`, `PAYMENT_PROVIDER=stripe` + secrets + webhook URL. Until configured, those features stay disabled and never fake success.
-6. **Revoke the earlier GitHub PAT** if not already done (it was pasted in chat). Use GitHub → Settings → Developer settings → Personal access tokens → **Tokens (classic)**.
+A project-scoped `vcp_` token was supplied and used transiently against the Vercel REST API. Findings:
+
+- Project **`allstorbd`** (`prj_GbBkTWgvm3v4NrCNlP2HYTYBk5CJ`), framework **`container`**, linked to `shopcartbd/testshop@main`, production aliases `allstorbd.vercel.app` plus two team-protected aliases.
+- Latest deployment `dpl_JCyo1zWDh4sMCnoi9X5jvjec4szg` was `READY / PROMOTED` on commit `cd5c467…`, yet `https://allstorbd.vercel.app/` returned **HTTP 500** with an empty body. The earlier `404 DEPLOYMENT_NOT_FOUND` is consistent with a hostname that had no ready deployment alias assigned at that moment, or with a different/custom domain not attached to this project.
+- Only **three** production env vars existed: `APP_URL`, `SESSION_DRIVER`, `SUPABASE_DB_URL` — all write-only sensitive values. `APP_KEY`, `DB_DRIVER`, `DATABASE_URL`, `APP_ENV`, `APP_DEBUG` and `DB_POOL_MODE` were absent. Vercel marks sensitive env values non-readable through the API [1](https://vercel.com/docs/environment-variables/managing-environment-variables), so the existing `SUPABASE_DB_URL` value was never printed or copied.
+- Fix: `Config.php` now accepts `SUPABASE_DB_URL` / `POSTGRES_URL` / `POSTGRES_URL_NON_POOLING` as `DATABASE_URL` aliases, `VERCEL_ENV` / `VERCEL_URL` as fallbacks, and derives `SUPABASE_URL` from a Supabase DB URI. `/api/health` bypasses DB-backed session bootstrap and reports `database_connected`, `schema_ready`, `db_source`, `db_host`, `db_port`, `db_ssl` and presence flags — never values.
+- Fix: missing non-secret production env names were upserted via `POST /v10/projects/{id}/env?upsert=true`; `APP_KEY` was generated with `secrets.token_hex(32)` and stored as a **sensitive** Vercel env var. `PORT` was deliberately left unset.
+- `tests/validate_vercel.php` grew from 28 to **34 checks**; `tests/validate.php` from 593 to **607 checks**. Local HTTP smoke remained **71/0**.
+
+Live redeploy verification and the final public URL are recorded in `/home/user/VERCEL_DEPLOY_RESULT.md` (workspace report outside the repository). The Vercel token was pasted in chat and must be revoked after use.
+
+## Still required by you
+
+1. **Use the correct domain.** The only project domain currently attached is `allstorbd.vercel.app`. If you opened a custom/older domain, it is not assigned to this project; add it in Vercel → Project → Settings → Domains (or tell us the exact hostname) instead of expecting the project alias to answer. If auto-detection ever misses the Container preset: `vercel project update --framework container --yes`.
+2. **Confirm Vercel env vars** in the dashboard. The minimum production names were already upserted through the API: `APP_ENV=production`, `APP_DEBUG=false`, `APP_KEY` (generated, write-only), `DB_DRIVER=pgsql`, `DB_POOL_MODE=transaction`; `APP_URL`, `SESSION_DRIVER` and `SUPABASE_DB_URL` already existed. Do **not** set `PORT` manually. `SUPABASE_DB_URL` is read through the new alias support, so its write-only value was never inspected or copied.
+3. **Prepare Supabase:** apply `database/migrations/001…004` in order from a trusted SQL client (replace the placeholder password in `004`), create Storage buckets/policies, then bootstrap the first admin with `scripts/bootstrap_admin.php`. `/api/health` now reports `schema_ready` so a missing migration is distinguishable from a bad DSN.
+4. **Container build / public checks:** Vercel built the OCI image during deployment; a local `docker build` / `vercel dev --local` is still not available in this sandbox. After deploy check `/api/health`, `/`, `/admin/login`, `/.env` → 404, and HSTS/CSP on the public HTTPS domain.
+5. **Optional integrations:** `SUPABASE_URL` + server-side secret, `MAIL_*`, `PAYMENT_PROVIDER=stripe` + secrets + webhook URL. Until configured, those features stay disabled and never fake success. A Supabase URL may be derived from the DB URI, but the server-side secret key was not supplied, so Storage remains disabled.
+6. **Revoke both chat-exposed tokens:** the classic `ghp_` GitHub PAT in **Tokens (classic)**, and the `vcp_` Vercel personal access token in Vercel → Account Settings → Tokens. Deleting chat messages or local files does not disable them.
 
 ## Honest boundary
 

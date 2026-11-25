@@ -150,3 +150,16 @@ A code-level audit against the official Vercel Container, FrankenPHP, Caddy and 
 Confirmed **not** broken: root `Dockerfile`/`Dockerfile.vercel` Container detection, `$PORT` default 80, `order php_server before file_server`, `root * /app`, `REQUEST_URI` preservation via `{http.request.orig_uri}`, `SCRIPT_NAME`, source/secret deny rules, DB-backed sessions/rate limits/audit/idempotency, and production upload guard.
 
 Still requires real credentials / a real build: Supabase migrations + env vars, Vercel project import, Docker/FrankenPHP image build, `vercel dev --local`, live PostgreSQL/Storage/RLS, Stripe/SMTP, and production header inspection. See `VERCEL_READINESS.md` for the full checklist.
+
+## 9. Live Vercel diagnosis and env-name correction — 2026-11-25
+
+With a project-scoped Vercel token, the API showed project `allstorbd` (Container preset, linked to `shopcartbd/testshop@main`) with a READY/PROMOTED deployment on `cd5c467…`. An earlier `404 DEPLOYMENT_NOT_FOUND` was consistent with a hostname that had no ready alias yet or with a custom domain not attached to the project; the current project domain `allstorbd.vercel.app` returned a runtime **500** because only three production env vars existed: `APP_URL`, `SESSION_DRIVER`, `SUPABASE_DB_URL`. The app required `APP_KEY`, `DB_DRIVER=pgsql`, `DATABASE_URL`, `APP_ENV=production` and related names.
+
+Fixes applied:
+
+- `Config.php` accepts `SUPABASE_DB_URL`, `POSTGRES_URL`, `POSTGRES_URL_NON_POOLING` as `DATABASE_URL` aliases; `VERCEL_ENV` / `VERCEL_URL` as fallbacks; derives `SUPABASE_URL` from a Supabase DB URI. Sensitive Vercel env values were never read or printed.
+- `/api/health` now bypasses DB-backed session bootstrap and reports `database_connected`, `schema_ready`, `db_source`, `db_host`, `db_port`, `db_ssl` and presence flags — never values.
+- Missing non-secret env names were upserted via Vercel REST API; `APP_KEY` was generated and stored as a write-only sensitive variable. `PORT` remains unset.
+- `tests/validate_vercel.php` now has **34 checks**; `tests/validate.php` **607 checks**; local HTTP smoke remained **71/0**.
+
+Live redeploy verification and the final public URL are recorded in `/home/user/VERCEL_DEPLOY_RESULT.md`. The only attached project domain is `allstorbd.vercel.app`; a different/custom hostname must be added in Vercel → Project → Settings → Domains before it will route.

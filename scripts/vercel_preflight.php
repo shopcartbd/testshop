@@ -32,8 +32,12 @@ echo 'AllStore Vercel preflight — ' . gmdate('c') . PHP_EOL;
 echo 'PHP ' . PHP_VERSION . ' | SAPI ' . PHP_SAPI . PHP_EOL . str_repeat('-', 64) . PHP_EOL;
 
 // --- Required runtime environment -----------------------------------------
-$appEnv = strtolower(env('APP_ENV') ?: 'local');
-if ($appEnv === 'production') { ok('APP_ENV=production'); }
+$appEnv = strtolower(env('APP_ENV') ?: '');
+if ($appEnv === '') {
+    $vercelEnv = strtolower(env('VERCEL_ENV') ?: '');
+    $appEnv = $vercelEnv === 'production' ? 'production' : ($vercelEnv === 'preview' ? 'staging' : 'local');
+}
+if ($appEnv === 'production') { ok('APP_ENV=production (or VERCEL_ENV=production)'); }
 else { warn('APP_ENV is not production (' . $appEnv . '); the Docker image sets it at build time.'); }
 
 if ($appEnv === 'production' && strtolower(env('APP_DEBUG') ?: 'false') === 'true') {
@@ -43,21 +47,27 @@ if ($appEnv === 'production' && strtolower(env('APP_DEBUG') ?: 'false') === 'tru
 if (env('APP_KEY') !== '') { ok('APP_KEY is set'); }
 else { fail('APP_KEY is missing; production bootstrap will return HTTP 500.'); }
 
-$driver = strtolower(env('DB_DRIVER') ?: 'local');
-if ($driver === 'pgsql') { ok('DB_DRIVER=pgsql'); }
-else { fail('DB_DRIVER must be pgsql in production (got "' . $driver . '").'); }
-
+$driver = strtolower(env('DB_DRIVER') ?: '');
 $databaseUrl = env('DATABASE_URL');
+$supabaseUrl = env('SUPABASE_DB_URL');
+$postgresUrl = env('POSTGRES_URL') ?: env('POSTGRES_URL_NON_POOLING');
 $supabaseHost = env('SUPABASE_DB_HOST');
 $supabasePass = env('SUPABASE_DB_PASSWORD');
-if ($databaseUrl !== '') { ok('DATABASE_URL is set'); }
-elseif ($supabaseHost !== '' && $supabasePass !== '') { ok('SUPABASE_DB_* host/password are set'); }
-else { fail('No PostgreSQL DSN: set DATABASE_URL or SUPABASE_DB_HOST/_PASSWORD.'); }
+$dsnValue = $databaseUrl ?: ($supabaseUrl ?: $postgresUrl);
+if ($driver === '') { $driver = ($dsnValue !== '' || ($supabaseHost !== '' && $supabasePass !== '')) ? 'pgsql' : 'local'; }
+if ($driver === 'pgsql') { ok('DB_DRIVER=pgsql (explicit or inferred from a DSN alias)'); }
+else { fail('DB_DRIVER must be pgsql in production (got "' . $driver . '").'); }
 
-if ($databaseUrl !== '' && !str_contains($databaseUrl, 'sslmode=require')) {
-    warn('DATABASE_URL has no sslmode=require; the app still enforces require/verify-ca/verify-full.');
+if ($databaseUrl !== '') { ok('DATABASE_URL is set'); }
+elseif ($supabaseUrl !== '') { ok('SUPABASE_DB_URL alias is set (read by Config.php as DATABASE_URL)'); }
+elseif ($postgresUrl !== '') { ok('POSTGRES_URL alias is set (read by Config.php as DATABASE_URL)'); }
+elseif ($supabaseHost !== '' && $supabasePass !== '') { ok('SUPABASE_DB_* host/password are set'); }
+else { fail('No PostgreSQL DSN: set DATABASE_URL, SUPABASE_DB_URL, POSTGRES_URL or SUPABASE_DB_HOST/_PASSWORD.'); }
+
+if ($dsnValue !== '' && !str_contains($dsnValue, 'sslmode=require')) {
+    warn('DSN has no sslmode=require; the app still enforces require/verify-ca/verify-full.');
 }
-if ($databaseUrl !== '' && str_contains($databaseUrl, ':6543')) {
+if ($dsnValue !== '' && str_contains($dsnValue, ':6543')) {
     ok('Transaction pooler port 6543 detected');
     if (strtolower(env('DB_POOL_MODE') ?: 'transaction') !== 'transaction') {
         warn('DB_POOL_MODE is not transaction; emulated prepares may be off on 6543.');
@@ -65,8 +75,10 @@ if ($databaseUrl !== '' && str_contains($databaseUrl, ':6543')) {
 }
 
 $appUrl = env('APP_URL');
+$vercelUrl = env('VERCEL_URL');
 if ($appUrl === '' || $appUrl === 'http://localhost:8080') {
-    fail('APP_URL is still the localhost default; set the real https:// domain.');
+    if ($vercelUrl !== '') { warn('APP_URL is unset/local; Config.php will derive https://' . $vercelUrl . ' from VERCEL_URL.'); }
+    else { fail('APP_URL is still the localhost default and VERCEL_URL is unavailable; set the real https:// domain.'); }
 } elseif (!str_starts_with($appUrl, 'https://')) {
     warn('APP_URL is not https://; Stripe success/cancel URLs will use it verbatim.');
 } else { ok('APP_URL is an https:// URL'); }
