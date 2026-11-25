@@ -46,11 +46,13 @@ try {
         return (int)$db->query("SELECT CASE WHEN has_schema_privilege(current_user, 'public', 'CREATE') THEN 1 ELSE 0 END")->fetchColumn() === 1;
     };
 
+    $schemaReady = (int)$pdo->query("SELECT CASE WHEN to_regclass('public.sessions') IS NOT NULL THEN 1 ELSE 0 END")->fetchColumn() === 1;
     $trials = [];
-    $privileged = $canCreate($pdo);
+    $canCreateOriginal = $canCreate($pdo);
+    $privileged = $schemaReady || $canCreateOriginal;
     $privilegedRole = $currentUser;
-    $privilegeMethod = 'original';
-    $trials[] = ['role' => $currentUser, 'method' => 'original', 'connected' => true, 'can_create' => $privileged];
+    $privilegeMethod = $schemaReady ? 'schema_ready' : 'original';
+    $trials[] = ['role' => $currentUser, 'method' => 'original', 'connected' => true, 'can_create' => $canCreateOriginal, 'schema_ready' => $schemaReady];
 
     // Discover owner-style roles without printing passwords or connection URIs.
     $candidates = ['postgres'];
@@ -65,7 +67,7 @@ try {
     // First try SET ROLE on the existing connection (works if the runtime role
     // is a member of an owner role). Then try the same secret with an owner
     // login name via a transient Config override.
-    if (!$privileged) {
+    if (!$schemaReady && !$privileged) {
         foreach ($candidates as $role) {
             if ($role === $currentUser) { continue; }
             $quoted = '"' . str_replace('"', '""', $role) . '"';
@@ -86,7 +88,7 @@ try {
         }
     }
     $rawDsn = Env::get('SUPABASE_DB_URL', '') ?: '';
-    if (!$privileged && $rawDsn !== '') {
+    if (!$schemaReady && !$privileged && $rawDsn !== '') {
         foreach ($candidates as $role) {
             if ($role === $currentUser) { continue; }
             $alt = Config::withDatabaseUser($rawDsn, $role);
@@ -124,12 +126,12 @@ try {
     }
 
     $pdo = Database::pdo();
-    $schemaReady = (int)$pdo->query("SELECT CASE WHEN to_regclass('public.sessions') IS NOT NULL THEN 1 ELSE 0 END")->fetchColumn() === 1;
     $steps = [
         'current_user' => $currentUser,
         'public_schema_owner' => $schemaOwner,
         'privileged_role' => $privilegedRole,
         'privilege_method' => $privilegeMethod,
+        'schema_ready' => $schemaReady,
         'candidate_trials' => $trials,
     ];
     if (!$schemaReady) {
