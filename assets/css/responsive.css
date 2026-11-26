@@ -3,9 +3,9 @@
    ===================================================================== */
 @media (max-width: 1280px) {
   .category-strip { grid-template-columns: repeat(6, minmax(0,1fr)); }
-  .product-grid.grid-5 { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  .product-grid.grid-5 { grid-template-columns: repeat(4, minmax(0,1fr)); }
   .footer-top { grid-template-columns: 1.4fr repeat(4,1fr); gap: var(--sp-6); }
-  .pdp-layout { gap: var(--sp-6); grid-template-columns: minmax(0,1fr) minmax(0,410px); }
+  .pdp-layout { gap: var(--sp-6); grid-template-columns: minmax(0,1fr) minmax(380px,.95fr); }
 }
 @media (max-width: 1120px) {
   .kpi-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
@@ -18,7 +18,7 @@
 }
 @media (max-width: 1024px) {
   :root { --header-h: 122px; }
-  .product-grid, .product-grid.grid-5 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .product-grid, .product-grid.grid-5 { grid-template-columns: repeat(3, minmax(0,1fr)); }
   .category-strip { grid-template-columns: repeat(4, minmax(0,1fr)); }
   .category-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .brand-strip { grid-template-columns: repeat(3, 1fr); }
@@ -76,8 +76,7 @@
   body { padding-bottom: 58px; }
   .container, .container-narrow { width: min(100% - 28px, var(--maxw)); }
   .section { padding-block: var(--sp-8); }
-  .product-grid, .product-grid.grid-3, .product-grid.grid-5, .product-grid.grid-4 { grid-template-columns: 1fr; gap: 14px; }
-  .product-media { aspect-ratio: 4 / 3; }
+  .product-grid, .product-grid.grid-3, .product-grid.grid-5, .product-grid.grid-4 { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
   .product-body { padding: 11px 11px 13px; }
   .product-name { font-size: var(--fs-sm); }
   .product-quick, .product-add { opacity: 1; transform: none; }
@@ -146,7 +145,7 @@
 @media (max-width: 390px) {
   .category-strip { grid-template-columns: repeat(3, 1fr); }
   .header-action .count { left: 20px; }
-  .product-grid, .product-grid.grid-3 { gap: 12px; }
+  .product-grid, .product-grid.grid-3 { gap: 8px; }
   .hero-copy h1 { font-size: 1.8rem; }
   .countdown .cd-box { min-width: 36px; }
 }

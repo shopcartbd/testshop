@@ -122,6 +122,7 @@ check("Checkout has professional styling and auto-zone notice", all(s in checkou
 order_views = [read("pages/cart.php"), read("pages/order-confirmation.php"), read("pages/account/order-details.php"), order_admin]
 check("Zero discount is not shown as a negative amount", "discount_cents'] ?? 0) > 0 ? '−' : ''" in read("api/handlers/_common.php") and "discount_cents'] > 0 ? '−' : ''" in checkout and all("> 0 ? '−' : ''" in v for v in order_views) and "−'.Helpers::money($totals['discount_cents'])" not in checkout)
 check("Product view has professional styling and delivery summary", all(s in product_page for s in ["product.css", "pdp-shell", "pdp-delivery-card", "DeliveryZoneService::publicSummary"]) and (ROOT / "assets/css/product.css").is_file() and (ROOT / "assets/css/checkout.css").is_file())
+check("Home grids are compact and the PDP purchase panel is enlarged", "grid-template-columns: repeat(4, minmax(0,1fr))" in read("assets/css/app.css") and "minmax(420px, .98fr)" in read("assets/css/product.css") and "min-height: 58px" in read("assets/css/product.css") and "Ships from our main warehouse" not in product_page)
 
 # No exact token literal may enter this release either.
 token_re = re.compile(rb"(?:ghp_[A-Za-z0-9]{20,}|vcp_[A-Za-z0-9]{20,})")

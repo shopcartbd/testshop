@@ -70,7 +70,7 @@ require APP_ROOT . '/includes/header.php';
     </div>
     <p class="pdp-short text-muted"><?= Helpers::e($p['short_description']) ?></p>
     <div class="pdp-block">
-      <div class="pdp-stock-card row-between"><strong data-pdp-stock class="<?= (int)$p['stock'] > 0 ? 'text-success' : 'text-danger' ?>"><?= (int)$p['is_digital'] === 1 ? 'Digital delivery — unlimited availability' : ((int)$p['stock'] > 0 ? 'In stock ('.(int)$p['stock'].' available)' : 'Out of stock') ?></strong><span class="text-muted" style="font-size:12px"><?= (int)$p['is_digital'] === 1 ? 'Delivered to your email — no courier needed' : 'Ships from our main warehouse' ?></span></div>
+      <div class="pdp-stock-card"><strong data-pdp-stock class="<?= (int)$p['stock'] > 0 ? 'text-success' : 'text-danger' ?>"><?= (int)$p['is_digital'] === 1 ? 'Digital delivery — unlimited availability' : ((int)$p['stock'] > 0 ? 'In stock ('.(int)$p['stock'].' available)' : 'Out of stock') ?></strong></div>
     </div>
     <?php if ($variants !== []): ?>
     <div class="pdp-block"><h4>Choose an option</h4>
@@ -104,7 +104,6 @@ require APP_ROOT . '/includes/header.php';
         <?php endif; ?>
       </div>
       <?php endforeach; ?>
-      <span class="field-hint">These details are saved with the ordered item and shown to the admin.</span>
     </div>
     <?php endif; ?>
     <div class="pdp-block"><h4>Quantity</h4>
