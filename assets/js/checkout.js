@@ -92,7 +92,11 @@
       .catch(() => {});
   }
   document.addEventListener('bd-location-change', refreshRates);
+  // Also listen directly: a cached /api/locations response can dispatch the
+  // initial custom event before this deferred script attaches its listener.
+  [country, division, district, area].forEach((el) => el.addEventListener('change', refreshRates));
   shippingBox.addEventListener('change', (event) => {
     if (event.target && event.target.name === 'shipping_method') refreshRates();
   });
+  refreshRates();
 })();
