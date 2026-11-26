@@ -21,12 +21,18 @@
   const needsShipping = () => !block || block.dataset.needsShipping !== '0';
   let hierarchy = null;
   let hierarchyPromise = null;
-  // Keep any value already chosen in server-rendered HTML while the async
-  // hierarchy loads; otherwise an early user selection would be lost.
+  // Keep any value already chosen in server-rendered HTML, or selected by the
+  // customer before /api/locations finishes loading. A cold production start
+  // can otherwise repopulate the selectors and silently drop that selection.
   const selected = {
     division: division.dataset.selected || division.value || '',
     district: district.dataset.selected || district.value || '',
     area: area.dataset.selected || area.value || '',
+  };
+  const captureSelection = () => {
+    selected.division = division.value || '';
+    selected.district = district.value || '';
+    selected.area = area.value || '';
   };
 
   const option = (value, label) => {
@@ -103,9 +109,13 @@
   };
   const populate = () => {
     const currentDivision = division.value || selected.division || '';
+    const currentDistrict = selected.district || district.value || '';
+    const currentArea = selected.area || area.value || '';
     fill(division, divisions(), 'Select division / বিভাগ', currentDivision);
     selected.division = '';
-    updateDistricts(); // respects the division chosen before /api/locations loaded
+    selected.district = currentDistrict;
+    selected.area = currentArea;
+    updateDistricts();
     division.required = district.required = area.required = country.value === 'BD';
   };
 
@@ -131,11 +141,14 @@
     autoFill(true);
   };
   const populateSimple = () => {
-    fill(division, divisions(), 'Select division', selected.division || '');
+    const currentDivision = selected.division || division.value || '';
+    const currentDistrict = selected.district || district.value || '';
+    const currentArea = selected.area || area.value || '';
+    fill(division, divisions(), 'Select division', currentDivision);
     selected.division = '';
-    fillDistrictsSimple(selected.district || '');
+    fillDistrictsSimple(currentDistrict);
     selected.district = '';
-    updateAreasSimple(selected.area || '');
+    updateAreasSimple(currentArea);
     division.required = false;
     district.required = area.required = country.value === 'BD' && needsShipping();
   };
@@ -162,15 +175,16 @@
 
   if (simple) {
     country.addEventListener('change', () => applyCountry(false));
-    district.addEventListener('change', () => { updateAreasSimple(); changed(); });
-    area.addEventListener('change', () => { autoFill(true); changed(); });
+    district.addEventListener('change', () => { captureSelection(); updateAreasSimple(); changed(); });
+    area.addEventListener('change', () => { captureSelection(); autoFill(true); changed(); });
   } else {
     country.addEventListener('change', () => applyCountry(false));
-    division.addEventListener('change', () => { updateDistricts(); changed(); });
-    district.addEventListener('change', () => { updateAreas(); changed(); });
-    area.addEventListener('change', () => { autoFill(true); changed(); });
+    division.addEventListener('change', () => { captureSelection(); updateDistricts(); changed(); });
+    district.addEventListener('change', () => { captureSelection(); updateAreas(); changed(); });
+    area.addEventListener('change', () => { captureSelection(); autoFill(true); changed(); });
   }
   if (city) city.addEventListener('input', () => { delete city.dataset.bdAuto; });
   if (region) region.addEventListener('input', () => { delete region.dataset.bdAuto; });
+  captureSelection();
   applyCountry(true);
 })();
