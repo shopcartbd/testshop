@@ -14,13 +14,15 @@ final class ShippingService
     {
         $country = strtoupper(substr(preg_replace('/[^A-Za-z\*]/', '', $country), 0, 3));
         $digitalOnly = !empty($location['digital_only']);
-        $cacheKey = $country . '|' . $weightGrams . '|' . $subtotalCents . '|' . md5(Helpers::json([
-            'division'=>$location['division'] ?? '', 'district'=>$location['district'] ?? '',
-            'area'=>$location['area'] ?? '', 'city'=>$location['city'] ?? '', 'region'=>$location['region'] ?? '',
-            'digital_only'=>$digitalOnly,
-        ]));
+        $cacheKey = $country . '|' . $weightGrams . '|' . $subtotalCents . '|' . md5(Helpers::json($location));
         if (isset(self::$ratesCache[$cacheKey])) { return self::$ratesCache[$cacheKey]; }
         if ($digitalOnly) { return self::$ratesCache[$cacheKey] = [self::digitalRate()]; }
+        // Admin-configured Bangladesh delivery charges take precedence over the
+        // generic shipping-zone rows for BD checkout and are always recomputed
+        // from the server-validated area selection.
+        if ($country === 'BD' && DeliveryZoneService::enabled()) {
+            return self::$ratesCache[$cacheKey] = [DeliveryZoneService::rateForLocation($location, $subtotalCents)];
+        }
         $rows = Database::all("SELECT sr.*, sz.countries, sz.regions, sz.cities, sz.name AS zone_name
             FROM shipping_rates sr JOIN shipping_zones sz ON sz.id=sr.zone_id
             WHERE sr.is_active=1 AND sz.is_active=1 ORDER BY sr.cost_cents ASC, sr.id ASC");

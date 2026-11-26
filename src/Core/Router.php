@@ -82,6 +82,8 @@ final class Router
         '/admin/transactions' => 'admin/transactions.php',
         '/admin/shipping' => 'admin/shipping.php',
         '/admin/locations' => 'admin/locations.php',
+        '/admin/delivery-charges' => 'admin/delivery-charges.php',
+        '/admin/setup-guide' => 'admin/setup-guide.php',
         '/admin/couriers' => 'admin/couriers.php',
         '/admin/returns' => 'admin/returns.php',
         '/admin/refunds' => 'admin/refunds.php',

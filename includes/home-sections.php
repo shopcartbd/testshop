@@ -4,6 +4,7 @@ declare(strict_types=1);
 if (!defined('ALLSTORE_BOOTSTRAPPED')) { exit('Forbidden'); }
 use AllStore\Core\Helpers;
 use AllStore\Core\Config;
+use AllStore\Services\DeliveryZoneService;
 require_once __DIR__ . '/components.php';
 
 function render_home_section(array $s): string
@@ -24,7 +25,7 @@ function render_home_section(array $s): string
                 . '<h1>' . Helpers::e($b['title']) . '</h1><p>' . Helpers::e($b['subtitle']) . '</p>'
                 . '<div class="hero-actions"><a class="btn btn-primary btn-lg" href="' . Helpers::e(Helpers::url($b['link_url'] ?: '/shop')) . '">Shop the collection ' . icon('arrow-right',17) . '</a>'
                 . '<a class="btn btn-outline btn-lg" href="/new-arrivals">New arrivals</a></div>'
-                . '<div class="row" style="margin-top:18px;gap:18px;font-size:12px;color:var(--c-muted)"><span>' . icon('truck',16) . ' Free shipping over ' . Helpers::money((int)Helpers::setting('free_shipping_threshold_cents','7500')) . '</span><span>' . icon('rotate',16) . ' 30-day returns</span></div>'
+                . '<div class="row" style="margin-top:18px;gap:18px;font-size:12px;color:var(--c-muted)"><span>' . icon('truck',16) . ' ' . Helpers::e(DeliveryZoneService::publicHeadline()) . '</span><span>' . icon('rotate',16) . ' 30-day returns</span></div>'
                 . '</div><div class="hero-media"><img src="' . Helpers::e($b['image_url']) . '" alt="' . Helpers::e($b['title']) . '" fetchpriority="high"></div>'
                 . '<div class="hero-dots">' . implode('', array_map(static fn($i) => '<button type="button" class="' . ($i === 0 ? 'active' : '') . '" aria-label="Slide ' . ($i+1) . '"></button>', array_keys($banners))) . '</div></div>';
             break;

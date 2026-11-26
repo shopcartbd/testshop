@@ -99,6 +99,26 @@ check("Private digital files resolve to signed URLs in order views", "UploadServ
 settings = read("admin/settings.php")
 seed = read("database/seed.php")
 check("Store defaults and seed target Bangladesh", "checkout_default_country" in settings and "checkout_default_country'=>'BD'" in seed and "'default_country'=>'BD'" in seed)
+check("Seed includes Bangladesh delivery-zone defaults", "delivery_zone_config_json" in seed and "DeliveryZoneService::defaultConfig()" in seed)
+check("Storefront currency defaults to BDT", "APP_CURRENCY', 'BDT'" in read("src/Core/Config.php") and "APP_CURRENCY=BDT" in read(".env.example"))
+check("Storefront promo follows configured BD delivery charges", "publicHeadline()" in read("src/Services/DeliveryZoneService.php") and "deliveryHeadline" in read("includes/header.php") and "DeliveryZoneService::publicHeadline()" in read("includes/home-sections.php") and "Complimentary shipping on orders over $75" not in read("database/seed.php"))
+check("Bengali font is bundled locally with OFL attribution", "Noto Sans Bengali" in read("assets/css/tokens.css") and "unicode-range: U+0980-09FF" in read("assets/css/tokens.css") and "Noto Sans Bengali" in read("docs/FONT_LICENSES.md") and all((ROOT / f"assets/fonts/noto-sans-bengali-{w}.ttf").is_file() for w in (400, 600, 700)) and (ROOT / "assets/fonts/OFL.txt").is_file())
+
+# UI / delivery-charge release, 2026-11-25.
+delivery_service = read("src/Services/DeliveryZoneService.php")
+router = read("src/Core/Router.php")
+admin_nav = read("includes/admin-layout.php")
+admin_css = read("assets/css/admin.css")
+check("Admin delivery-charge service uses settings and three BD zones", all(s in delivery_service for s in ["delivery_zone_config_json", "dhaka_city", "dhaka_sub_area", "outside_dhaka", "rateForLocation(", "classify("]))
+check("Dhaka city rates are scoped to Dhaka division", "$isDhakaDivision = self::matchesAny($divisionFields" in delivery_service and "Kushtia Mirpur" in delivery_service and "'Dhaka City'" in delivery_service and "'Dhaka District'" not in delivery_service)
+check("Shipping service applies server-side BD zone rates", "DeliveryZoneService::rateForLocation" in read("src/Services/ShippingService.php") and "DeliveryZoneService::enabled()" in read("src/Services/ShippingService.php"))
+check("Admin delivery-charges and setup-guide pages are routed", "'/admin/delivery-charges'" in router and "'/admin/setup-guide'" in router and (ROOT / "admin/delivery-charges.php").is_file() and (ROOT / "admin/setup-guide.php").is_file())
+check("Admin navigation is grouped with Delivery and Setup guide", all(s in admin_nav for s in ["'Delivery' =>", "Delivery charges", "Setup guide", "groupNotes", "linkNotes"]))
+check("Admin shipping address has a structured card and copy button", all(s in order_admin for s in ["address-card", "address-copy-btn", "data-copy-address", "address-copy-preview", "DeliveryZoneService::classify"]))
+check("Admin copy handler and address styles exist", "data-copy-address" in read("assets/js/admin.js") and "address-card" in admin_css and "copy'" in read("includes/icons.php"))
+check("Checkout has professional styling and auto-zone notice", all(s in checkout for s in ["checkout.css", "checkout-hero", "checkout-summary", 'id="checkoutDeliveryZone"', "delivery-zone-note"]) and "zone" in read("api/handlers/checkout-rates.php") and "showZone" in checkout_js)
+check("Zero discount is not shown as a negative amount", "discount_cents'] ?? 0) > 0 ? '−' : ''" in read("api/handlers/_common.php") and "discount_cents'] > 0 ? '−' : ''" in checkout and "−'.Helpers::money($totals['discount_cents'])" not in checkout)
+check("Product view has professional styling and delivery summary", all(s in product_page for s in ["product.css", "pdp-shell", "pdp-delivery-card", "DeliveryZoneService::publicSummary"]) and (ROOT / "assets/css/product.css").is_file() and (ROOT / "assets/css/checkout.css").is_file())
 
 # No exact token literal may enter this release either.
 token_re = re.compile(rb"(?:ghp_[A-Za-z0-9]{20,}|vcp_[A-Za-z0-9]{20,})")

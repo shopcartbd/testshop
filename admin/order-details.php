@@ -11,6 +11,7 @@ use AllStore\Core\Logger;
 use AllStore\Core\AppException;
 use AllStore\Models\OrderRepository;
 use AllStore\Services\OrderMediaService;
+use AllStore\Services\DeliveryZoneService;
 require_once APP_ROOT . '/includes/admin-crud.php';
 Auth::requireAdmin('orders.manage');
 $number = Request::str('number','',80);
@@ -62,6 +63,31 @@ $shipment=OrderRepository::shipment((string)$order['id']); $payment=OrderReposit
 $invoice=OrderRepository::invoice((string)$order['id']); $returns=OrderRepository::returnsForOrder((string)$order['id']); $refunds=OrderRepository::refunds((string)$order['id']);
 $couriers=Database::all('SELECT id,name FROM couriers WHERE is_active=1 ORDER BY name');
 $addr=(array)Helpers::decode((string)$order['shipping_address'],[]);
+$addressLocation=DeliveryZoneService::locationFromAddress($addr);
+$zoneInfo=null;
+if (strtoupper((string)($addr['country'] ?? '')) === 'BD' && (int)$order['shipping_cents'] >= 0) {
+    $zoneInfo=DeliveryZoneService::classify($addressLocation);
+}
+$copyLines=[
+    'Order: '.(string)$number,
+    'Customer: '.(string)($order['customer_name'] ?? ''),
+    'Phone: '.(string)($order['customer_phone'] ?? ($addr['phone'] ?? '')),
+    'Email: '.(string)($order['customer_email'] ?? ''),
+];
+foreach ([
+    'Address' => [$addr['line1'] ?? '', $addr['line2'] ?? ''],
+    'Area' => [$addr['area'] ?? '', $addr['city'] ?? ''],
+    'District' => [$addr['district'] ?? ''],
+    'Division' => [$addr['division'] ?? '', $addr['region'] ?? ''],
+    'Post / Country' => [$addr['postal_code'] ?? '', $addr['country'] ?? ''],
+] as $label=>$parts) {
+    $parts=array_values(array_filter(array_map(static fn($v)=>trim((string)$v),$parts),static fn($v)=>$v!==''));
+    if ($parts !== []) { $copyLines[]=$label.': '.implode(', ',array_unique($parts)); }
+}
+if ($zoneInfo) { $copyLines[]='Delivery zone: '.$zoneInfo['label']; }
+$copyLines[]='Delivery charge: '.Helpers::money((int)$order['shipping_cents']);
+if (!empty($order['customer_note'])) { $copyLines[]='Note: '.(string)$order['customer_note']; }
+$copyText=implode("\n",$copyLines);
 admin_header(['title'=>'Order '.$number,'subtitle'=>'Fulfilment, payment and customer record','active'=>'orders']);
 echo '<div class="row-between wrap" style="margin-bottom:16px"><div><h2>'.Helpers::e($number).'</h2><p class="text-muted" style="font-size:13px">Placed '.Helpers::e(Helpers::dateNice($order['placed_at'])).' · '.admin_status($order).' '.admin_status($order,'payment_status').'</p></div><a class="btn btn-outline btn-sm" href="/admin/orders">← All orders</a></div>';
 echo '<div class="stat-grid" style="margin-bottom:16px"><div class="stat-card"><div class="stat-label">Total</div><div class="stat-value">'.Helpers::money((int)$order['total_cents']).'</div></div><div class="stat-card"><div class="stat-label">Items</div><div class="stat-value">'.count($items).'</div></div><div class="stat-card"><div class="stat-label">Customer</div><div class="stat-value" style="font-size:18px">'.Helpers::e($order['customer_name']).'</div></div><div class="stat-card"><div class="stat-label">Payment</div><div class="stat-value" style="font-size:18px">'.Helpers::e(ucfirst((string)$order['payment_method'])).'</div></div></div>';
@@ -88,9 +114,38 @@ foreach ($items as $it) {
     echo '</div></div><strong>'.Helpers::money((int)$it['total_cents']).'</strong></div>';
 }
 echo '<div style="margin-top:14px"><div class="summary-line"><span>Subtotal</span><strong>'.Helpers::money((int)$order['subtotal_cents']).'</strong></div><div class="summary-line"><span>Discount</span><strong>−'.Helpers::money((int)$order['discount_cents']).'</strong></div><div class="summary-line"><span>Shipping</span><strong>'.Helpers::money((int)$order['shipping_cents']).'</strong></div><div class="summary-line"><span>Tax</span><strong>'.Helpers::money((int)$order['tax_cents']).'</strong></div><div class="summary-line total"><span>Total</span><strong>'.Helpers::money((int)$order['total_cents']).'</strong></div></div></div>';
-echo '<div class="card card-pad"><h3 style="margin-bottom:12px">Customer & delivery</h3><p style="font-size:13px;line-height:1.8">';
-foreach (['full_name','line1','line2','city','division','district','area','area_type','region','postal_code','country','phone'] as $k) if (!empty($addr[$k])) echo Helpers::e((string)$addr[$k]).'<br>';
-echo '</p><div class="text-muted" style="font-size:12px">Email: '.Helpers::e($order['customer_email']).'<br>Phone: '.Helpers::e($order['customer_phone']).'</div>';
+echo '<div class="card card-pad"><div class="row-between" style="margin-bottom:12px"><h3>Customer & delivery</h3><button type="button" class="address-copy-btn" data-copy-address="'.Helpers::e($copyText).'">'.icon('copy',14).' Copy address</button></div>';
+echo '<div class="address-card"><div class="address-card-head"><h4>'.icon('map-pin',15).' Shipping address</h4>'.($zoneInfo ? '<span class="zone-badge">'.Helpers::e($zoneInfo['label']).'</span>' : '').'</div><div class="address-grid">';
+$addressRows=[
+    'Full name'=>(string)($addr['full_name'] ?? $order['customer_name'] ?? ''),
+    'Phone'=>(string)($addr['phone'] ?? $order['customer_phone'] ?? ''),
+    'Street address'=>(string)($addr['line1'] ?? ''),
+    'Apartment / suite'=>(string)($addr['line2'] ?? ''),
+    'Division'=>(string)($addr['division'] ?? ''),
+    'District'=>(string)($addr['district'] ?? ''),
+    'Upazila / Thana'=>(string)($addr['area'] ?? ''),
+    'Area type'=>(string)($addr['area_type'] ?? ''),
+    'City'=>(string)($addr['city'] ?? ''),
+    'Region'=>(string)($addr['region'] ?? ''),
+    'Postal code'=>(string)($addr['postal_code'] ?? ''),
+    'Country'=>(string)($addr['country'] ?? ''),
+    'Email'=>(string)($order['customer_email'] ?? ''),
+];
+$rendered=0;
+foreach ($addressRows as $label=>$value) {
+    if (trim($value)==='') { continue; }
+    $span=in_array($label,['Street address','Apartment / suite','Email'],true) ? ' span-2' : '';
+    echo '<div class="address-row'.$span.'"><span class="label">'.Helpers::e($label).'</span><span class="value">'.Helpers::e($value).'</span></div>';
+    $rendered++;
+}
+if ($rendered===0) {
+    echo '<div class="address-row span-2"><span class="label">Delivery</span><span class="value">Digital order — no courier address required</span></div>';
+}
+echo '</div>';
+if ($zoneInfo) {
+    echo '<div class="address-zone">'.icon('truck',15).'<span><strong>'.Helpers::e($zoneInfo['label']).'</strong> · Applied delivery charge '.Helpers::money((int)$order['shipping_cents']).' · Current zone rate '.Helpers::money((int)$zoneInfo['charge_cents']).'</span></div>';
+}
+echo '<pre class="address-copy-preview">'.Helpers::e($copyText).'</pre></div>';
 if ($order['customer_note']) echo '<div class="alert alert-info" style="margin-top:12px">'.icon('message',16).'<span>'.Helpers::e($order['customer_note']).'</span></div>';
 echo '<hr><h4 style="margin-bottom:10px">Status transition</h4><form method="post">'.Session::csrfField().'<input type="hidden" name="action" value="status"><div class="form-grid"><div class="field"><label>New status</label><select class="select" name="status">';
 foreach (OrderRepository::STATUSES as $s) echo '<option value="'.$s.'" '.(($order['status']===$s)?'selected':'').'>'.Helpers::e(ucwords(str_replace('_',' ',$s))).'</option>';

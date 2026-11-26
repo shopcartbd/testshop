@@ -37,6 +37,10 @@ if not ADMIN_PASSWORD:
             ADMIN_PASSWORD = m.group(1).strip()
 
 CSRF_HEADER = "X-CSRF-TOKEN"
+# Give each local run a stable, unique client IP. Without this, repeated local
+# test runs share the fixed-window rate-limit bucket and can fail even when the
+# application is healthy. This header is only used by the local smoke client.
+SMOKE_CLIENT_IP = "198.51.100." + str((uuid.uuid4().int % 253) + 1)
 csrf = ""
 
 
@@ -101,7 +105,7 @@ def call(method: str, path: str, body=None, *, csrf_mode: str = "default",
          accept: str = "application/json", extra_headers: dict | None = None,
          form_body: dict | None = None) -> Resp:
     global csrf
-    headers = {"Accept": accept}
+    headers = {"Accept": accept, "X-Forwarded-For": SMOKE_CLIENT_IP}
     if csrf_mode != "none":
         token = csrf_override if csrf_override is not None else csrf
         if token:
@@ -211,7 +215,7 @@ suite.check("CSRF token is present", len(csrf) >= 32, f"length={len(csrf)}")
 for header in ["Content-Security-Policy", "X-Content-Type-Options", "Referrer-Policy", "X-Frame-Options"]:
     suite.check("Security header " + header, bool(home.headers.get(header)))
 
-for asset in ["/assets/js/app.js", "/assets/css/app.css", "/assets/img/favicon.svg", "/assets/img/hero-marketplace.jpg"]:
+for asset in ["/assets/js/app.js", "/assets/css/app.css", "/assets/img/favicon.svg", "/assets/img/hero-marketplace.jpg", "/assets/fonts/noto-sans-bengali-400.ttf"]:
     res = call("GET", asset, csrf_mode="none", accept="*/*")
     expect("Static asset " + asset, res, (200,), len(res.body) > 100)
 

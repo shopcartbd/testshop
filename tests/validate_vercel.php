@@ -49,6 +49,7 @@ $check(str_contains($caddy, 'php_server'), 'php_server front controller is used'
 $check(str_contains($caddy, 'env REQUEST_URI {http.request.orig_uri}'), 'REQUEST_URI is preserved for clean routes');
 $check(str_contains($caddy, 'env SCRIPT_NAME /index.php'), 'SCRIPT_NAME is pinned to the front controller');
 $check(str_contains($caddy, 'respond @denied 404') && str_contains($caddy, 'respond @privatePhp 404'), 'Source/secret/direct-PHP paths are denied');
+$check(str_contains($read('router.php'), 'css|js|img|fonts') && str_contains($caddy, 'try_files {path} index.php'), 'Local and container runtimes serve bundled Bengali font assets');
 
 // vercel.json platform config.
 $check(is_array($vercel) && ($vercel['version'] ?? null) === 2, 'vercel.json is valid version 2');

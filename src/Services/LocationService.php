@@ -42,6 +42,7 @@ final class LocationService
         } catch (\Throwable) {
             // Checkout must remain usable even if a read-only replica denies the write.
         }
+        DeliveryZoneService::ensureDefaults();
     }
 
     public static function defaultCountry(): string

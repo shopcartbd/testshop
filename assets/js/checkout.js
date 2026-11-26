@@ -10,6 +10,7 @@
   const area = $('area_id');
   const shippingBox = $('checkoutShippingMethods');
   const shippingTitle = $('checkoutShippingTitle');
+  const zoneNote = $('checkoutDeliveryZone');
   if (!country || !shippingBox || !division || !district || !area) return;
   let requestSeq = 0;
 
@@ -20,20 +21,34 @@
       if (el && totals[key] !== undefined) el.textContent = totals[key];
     });
   };
+  const showZone = (zone) => {
+    if (!zoneNote || !zone) return;
+    const label = zone.label || '';
+    const cost = zone.cost_label || '';
+    const note = zone.note || '';
+    zoneNote.textContent = label
+      ? (cost ? label + ' · ' + cost : label) + (note ? ' — ' + note : '')
+      : '';
+    zoneNote.hidden = !label;
+    if (shippingTitle && label && label !== 'Select delivery area') {
+      shippingTitle.textContent = 'Delivery — ' + label;
+    }
+  };
   const renderRates = (data) => {
     const rates = Array.isArray(data.rates) ? data.rates : [];
     const previous = document.querySelector('input[name="shipping_method"]:checked');
     const previousValue = previous ? previous.value : '';
     shippingBox.textContent = '';
-    if (rates.length === 0) {
-      const note = document.createElement('p');
-      note.className = 'text-muted';
-      note.textContent = 'No delivery charge is needed for this order.';
+    showZone(data.zone);
+    if (rates.length === 0 || (rates.length === 1 && rates[0].method === 'select_area')) {
+      const note = document.createElement('div');
+      note.className = 'delivery-empty';
+      note.textContent = rates[0]?.estimate || 'Select your delivery area to see the exact charge.';
       shippingBox.appendChild(note);
       const hidden = document.createElement('input');
       hidden.type = 'hidden';
       hidden.name = 'shipping_method';
-      hidden.value = 'digital';
+      hidden.value = rates[0]?.method || 'select_area';
       shippingBox.appendChild(hidden);
       return;
     }
@@ -81,13 +96,13 @@
       .then((r) => r.json())
       .then((json) => {
         if (seq !== requestSeq || !json.success || !json.data) return;
-        renderRates(json.data);
-        renderTotals(json.data.totals);
         if (shippingTitle) {
           shippingTitle.textContent = json.data.requires_shipping === false
             ? 'Digital delivery — no courier needed'
             : 'Shipping method';
         }
+        renderRates(json.data);
+        renderTotals(json.data.totals);
       })
       .catch(() => {});
   }

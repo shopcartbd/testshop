@@ -101,3 +101,62 @@ body.admin-body { background: #f5f7f6; }
 @media (max-width: 860px) {
   .admin-topbar [data-admin-menu] { display: inline-flex !important; }
 }
+
+/* ---------------------------------------------------------- organised nav */
+.admin-nav .group { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.admin-nav .group small { font-size: 9px; letter-spacing: 0; text-transform: none; color: #4f625d; font-weight: 500; }
+.admin-nav a { position: relative; }
+.admin-nav a[title] { cursor: help; }
+.admin-nav a .nav-new { margin-left: auto; font-size: 9px; letter-spacing: .04em; background: #b8794c; color: #fff; padding: 2px 6px; border-radius: 8px; font-weight: 700; }
+
+/* --------------------------------------------------------- setup guide */
+.setup-hero { background: linear-gradient(120deg, #111a1c, #1d5a49); color: #fff; border-radius: var(--radius-lg); padding: 24px; margin-bottom: 18px; }
+.setup-hero h2 { color: #fff; font-size: 1.5rem; }
+.setup-hero p { color: #b9ccc6; font-size: 13px; margin-top: 6px; max-width: 70ch; }
+.setup-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.setup-card { display: flex; flex-direction: column; gap: 10px; padding: 18px; border: 1px solid var(--c-border); border-radius: var(--radius); background: #fff; box-shadow: var(--shadow-xs); }
+.setup-card .num { width: 28px; height: 28px; border-radius: 8px; background: var(--c-brand-soft); color: var(--c-brand-dark); display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+.setup-card h3 { font-size: 14px; }
+.setup-card p { font-size: 12px; color: var(--c-muted); line-height: 1.6; flex: 1; }
+.setup-card .btn { align-self: flex-start; }
+
+/* --------------------------------------------------- delivery charge page */
+.delivery-rate-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.delivery-rate-card { border: 1px solid var(--c-border); border-radius: var(--radius); padding: 16px; background: var(--c-surface-2); }
+.delivery-rate-card .zone-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; margin-bottom: 12px; }
+.delivery-rate-card .zone-title svg { width: 17px; height: 17px; color: var(--c-brand); }
+.delivery-rate-card .money-input { display: flex; align-items: center; gap: 8px; }
+.delivery-rate-card .money-input span { font-weight: 700; color: var(--c-brand-dark); }
+.delivery-rate-card .field-hint { font-size: 11px; }
+.zone-preview { width: 100%; border-collapse: collapse; font-size: 13px; }
+.zone-preview th, .zone-preview td { padding: 11px 12px; border-bottom: 1px solid var(--c-border); text-align: left; }
+.zone-preview th { background: var(--c-surface-2); font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--c-muted); }
+.zone-preview tr:last-child td { border-bottom: 0; }
+.zone-preview .count { font-variant-numeric: tabular-nums; font-weight: 700; }
+.zone-badge { display: inline-flex; align-items: center; gap: 5px; border-radius: var(--radius-pill); padding: 3px 9px; font-size: 11px; font-weight: 600; background: var(--c-brand-soft); color: var(--c-brand-dark); }
+
+/* --------------------------------------------- admin shipping address card */
+.address-card { border: 1px solid var(--c-border); border-radius: var(--radius); background: #fff; overflow: hidden; }
+.address-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 16px; background: var(--c-surface-2); border-bottom: 1px solid var(--c-border); }
+.address-card-head h4 { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.address-card-head h4 svg { width: 16px; height: 16px; color: var(--c-brand); }
+.address-copy-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 11px; border: 1px solid var(--c-border-strong); border-radius: var(--radius-sm); background: #fff; font-size: 11px; font-weight: 600; color: var(--c-brand-dark); transition: all var(--transition); }
+.address-copy-btn:hover { background: var(--c-brand-soft); border-color: var(--c-brand); }
+.address-copy-btn.copied { background: var(--c-success-soft); border-color: var(--c-success); color: var(--c-success); }
+.address-copy-btn svg { width: 14px; height: 14px; }
+.address-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; }
+.address-row { padding: 12px 16px; border-bottom: 1px solid var(--c-border); min-width: 0; }
+.address-row:nth-child(odd) { border-right: 1px solid var(--c-border); }
+.address-row .label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--c-subtle); margin-bottom: 4px; }
+.address-row .value { font-size: 13px; font-weight: 600; color: var(--c-ink); word-break: break-word; }
+.address-row.span-2 { grid-column: span 2; border-right: 0; }
+.address-zone { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 10px 16px; background: var(--c-brand-tint); border-top: 1px solid #d6ebe2; font-size: 12px; color: var(--c-brand-dark); }
+.address-zone svg { width: 15px; height: 15px; }
+.address-copy-preview { margin: 0; padding: 12px 16px; background: #111a1c; color: #d7e4df; font-size: 11px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+@media (max-width: 980px) {
+  .setup-grid, .delivery-rate-grid { grid-template-columns: 1fr; }
+  .address-grid { grid-template-columns: 1fr; }
+  .address-row:nth-child(odd) { border-right: 0; }
+  .address-row.span-2 { grid-column: auto; }
+}

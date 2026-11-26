@@ -12,7 +12,7 @@ $full = realpath($root . $path);
 $publicUpload = str_starts_with($path, '/storage/uploads/')
     && !str_contains($path, '..')
     && !str_ends_with($path, '.php');
-$publicStatic = preg_match('#^/assets/(?:css|js|img)/#', $path) === 1 || $publicUpload;
+$publicStatic = preg_match('#^/assets/(?:css|js|img|fonts)/#', $path) === 1 || $publicUpload;
 if ($path !== '/' && $publicStatic && $full !== false
     && str_starts_with($full, $root . DIRECTORY_SEPARATOR)
     && is_file($full) && !str_ends_with($full, '.php')

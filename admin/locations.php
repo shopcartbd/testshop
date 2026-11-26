@@ -212,5 +212,5 @@ foreach ($data['divisions'] as $d) {
     echo '</details>';
 }
 echo '</div></div>';
-echo '<div class="alert alert-info" style="margin-top:16px">'.icon('info',16).'<span>Bundled reference data: Open Admin Data, 8 divisions / 64 districts / 495 upazilas, CC-BY-4.0. <a class="text-brand" href="https://github.com/open-admin-data/bangladesh-administrative-divisions" target="_blank" rel="noopener">Source and attribution</a>. Add city thanas here and they appear at checkout instantly. Shipping zones can target division, district or upazila/thana names.</span></div>';
+echo '<div class="alert alert-info" style="margin-top:16px">'.icon('info',16).'<span>Bundled reference data: Open Admin Data, 8 divisions / 64 districts / 495 upazilas, CC-BY-4.0. <a class="text-brand" href="https://github.com/open-admin-data/bangladesh-administrative-divisions" target="_blank" rel="noopener">Source and attribution</a>. Add city thanas here and they appear at checkout instantly. Next: set <a class="text-brand" href="/admin/delivery-charges">Delivery charges</a> for ঢাকা / সাব-এরিয়া / ঢাকার বাহিরে, or open the <a class="text-brand" href="/admin/setup-guide">Setup guide</a>.</span></div>';
 admin_footer();

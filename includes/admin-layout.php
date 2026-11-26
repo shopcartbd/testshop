@@ -20,6 +20,7 @@ function admin_header(array $opts = []): void
     $groups = [
         'Overview' => [
             ['Dashboard','/admin','dashboard','dashboard'],
+            ['Setup guide','/admin/setup-guide','setup-guide','sparkles'],
             ['Reports','/admin/reports','reports','chart'],
             ['Notifications','/admin/notifications','notifications','bell'],
             ['Activity logs','/admin/activity-logs','activity','file'],
@@ -51,16 +52,30 @@ function admin_header(array $opts = []): void
             ['Reviews','/admin/reviews','reviews','star'],
             ['Support tickets','/admin/tickets','tickets','message'],
         ],
-        'System' => [
-            ['Shipping','/admin/shipping','shipping','truck'],
-            ['Bangladesh areas','/admin/locations','locations','package'],
+        'Delivery' => [
+            ['Bangladesh areas','/admin/locations','locations','map'],
+            ['Delivery charges','/admin/delivery-charges','delivery-charges','banknote'],
+            ['Shipping zones','/admin/shipping','shipping','truck'],
             ['Couriers','/admin/couriers','couriers','package'],
+        ],
+        'System' => [
             ['Admin users','/admin/admin-users','admin-users','users'],
             ['Roles','/admin/roles','roles','lock'],
             ['Permissions','/admin/permissions','permissions','shield'],
             ['Settings','/admin/settings','settings','settings'],
             ['Security','/admin/security','security','shield'],
         ],
+    ];
+    $groupNotes = [
+        'Overview'=>'Start here', 'Catalogue'=>'Products & specs', 'Sales'=>'Orders & customers',
+        'Content'=>'Storefront', 'Delivery'=>'BD areas & charges', 'System'=>'Access & settings',
+    ];
+    $linkNotes = [
+        '/admin/setup-guide'=>'Step-by-step store setup',
+        '/admin/locations'=>'Add division, district, upazila or thana',
+        '/admin/delivery-charges'=>'Dhaka / sub-area / outside Dhaka rates',
+        '/admin/shipping'=>'Advanced carrier and country rules',
+        '/admin/orders'=>'Images, exact options, copy address',
     ];
     $appName = (string)Config::get('app.name');
     $u = Auth::user();
@@ -77,6 +92,7 @@ function admin_header(array $opts = []): void
 <link rel="stylesheet" href="/assets/css/app.css">
 <link rel="stylesheet" href="/assets/css/admin.css">
 <link rel="stylesheet" href="/assets/css/responsive.css">
+<?php foreach ((array)($page['extra_css'] ?? []) as $extraCss): ?><link rel="stylesheet" href="<?= Helpers::e((string)$extraCss) ?>"><?php endforeach; ?>
 </head>
 <body class="admin-body" data-csrf="<?= Helpers::e(Session::csrfToken()) ?>" data-logged-in="1" data-currency-symbol="<?= Helpers::e(Helpers::currencySymbol()) ?>">
 <div class="admin-shell">
@@ -84,10 +100,10 @@ function admin_header(array $opts = []): void
     <a class="admin-brand" href="/admin"><span class="brand-mark"><?= icon('layers',18) ?></span><span><?= Helpers::e($appName) ?><em>Admin console</em></span></a>
     <nav class="admin-nav" aria-label="Admin navigation">
       <?php foreach ($groups as $g => $links): ?>
-      <div class="group"><?= Helpers::e($g) ?></div>
+      <div class="group"><span><?= Helpers::e($g) ?></span><small><?= Helpers::e($groupNotes[$g] ?? '') ?></small></div>
       <?php foreach ($links as $l):
         $label = $l[0]; $href = $l[1]; $key = $l[2]; $ic = is_array($l[3]) ? reset($l[3]) : $l[3]; ?>
-      <a href="<?= Helpers::url($href) ?>" class="<?= $page['active'] === $key ? 'active' : '' ?>"><?= icon((string)$ic,17) ?><?= Helpers::e($label) ?><?php if ($key === 'notifications' && $unread > 0): ?><span class="pill"><?= $unread ?></span><?php endif; ?></a>
+      <a href="<?= Helpers::url($href) ?>" class="<?= $page['active'] === $key ? 'active' : '' ?>" title="<?= Helpers::e($linkNotes[$href] ?? $label) ?>"><?= icon((string)$ic,17) ?><?= Helpers::e($label) ?><?php if ($key === 'delivery-charges'): ?><span class="nav-new">NEW</span><?php endif; ?><?php if ($key === 'notifications' && $unread > 0): ?><span class="pill"><?= $unread ?></span><?php endif; ?></a>
       <?php endforeach; ?>
       <?php endforeach; ?>
     </nav>
@@ -97,7 +113,7 @@ function admin_header(array $opts = []): void
     <header class="admin-topbar">
       <div style="display:flex;align-items:center;gap:12px">
         <button type="button" class="icon-btn" data-admin-menu aria-label="Toggle navigation" style="display:none"><?= icon('menu',20) ?></button>
-        <div><h1><?= Helpers::e($page['title']) ?></h1><div class="crumbs">Admin / <?= Helpers::e($page['title']) ?></div></div>
+        <div><h1><?= Helpers::e($page['title']) ?></h1><div class="crumbs">Admin / <?= Helpers::e($page['title']) ?><?= !empty($page['subtitle']) ? ' · '.Helpers::e($page['subtitle']) : '' ?></div></div>
       </div>
       <div class="right">
         <form class="search" action="<?= Helpers::url('/admin/orders') ?>" method="get"><?= icon('search',16) ?><input type="search" name="q" placeholder="Search orders…" aria-label="Search orders"></form>

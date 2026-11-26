@@ -106,3 +106,16 @@ Verification after these changes:
 - Final clean `/home/user/allstore.zip`: approximately **1.42 MB**, **244 entries**, **192 PHP**, **11 Markdown docs**, integrity `ok`, forbidden entries `0`, `regions:["sin1"]`, no `.env`/SQLite/local admin credential/exact token literal.
 
 These are **local-source** results; the local test run does not itself verify live deployment. Live GitHub/Vercel promotion and REST/browser verification are recorded separately in `/home/user/FEATURE_DEPLOY_RESULT.md` and `/home/user/FEATURE_RELEASE_REPORT_BN.md`.
+
+## 2026-11-25 UI polish & Bangladesh delivery-charge release
+
+A second follow-up added a professional checkout/product layout, a structured copyable admin shipping address, an organised admin menu with a Setup guide, and admin-configurable Bangladesh delivery charges for Dhaka city / Dhaka sub-area / outside Dhaka. See `docs/UI_DELIVERY_RELEASE_2026-11-25.md`. No new SQL table or user-run migration is required; the configuration lives in `settings.delivery_zone_config_json` and is applied server-side by `ShippingService`.
+
+Verification after these changes:
+
+- `bash tests/run.sh`: **195 PHP** syntax, **5 JS** syntax, **15/0** bug-fix static checks, **46/0** feature static checks, **653** route/handler checks, **41** Vercel-readiness checks, **74/0 HTTP smoke checks**.
+- UI/delivery runtime: **22/22** checks — delivery-charge save/reset, three zone classifications, free-over threshold, product/checkout styling, copy-address data, local Bengali font, same-named-area regression, new/updated admin pages and no 5xx.
+- Headless Chromium: **13/13** checks — desktop product view, Bengali font load, checkout cascade + automatic zone notice, zero-discount formatting, mobile 390×844 no-overflow, admin delivery charges, setup guide, copy-button feedback, **0 console/page errors**. Screenshots: `/home/user/product_view_local.png`, `/home/user/checkout_beautiful_local.png`, `/home/user/checkout_bd_zone_local.png`, `/home/user/admin_delivery_charges_local.png`, `/home/user/admin_setup_guide_local.png`, `/home/user/admin_address_copy_local.png`.
+- Final clean `/home/user/allstore.zip`: approximately **1.66 MB**, **255 entries**, **195 PHP**, **14 Markdown docs**, **3 local Bengali TTF fonts**, integrity `ok`, forbidden entries `0`, `regions:["sin1"]`, no `.env`/SQLite/local admin credential/exact token literal. The exact current byte size and SHA-256 are recorded in `/home/user/ui_delivery_release_info.json`.
+
+These are local-source results. The live push/deploy and REST/browser verification for this specific release are recorded in `/home/user/UI_DELIVERY_DEPLOY_RESULT.md` and `/home/user/FEATURE_RELEASE_REPORT_BN.md`.

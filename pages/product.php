@@ -8,6 +8,7 @@ use AllStore\Core\Config;
 use AllStore\Models\CatalogRepository;
 use AllStore\Models\CustomerRepository;
 use AllStore\Services\ShippingService;
+use AllStore\Services\DeliveryZoneService;
 require_once APP_ROOT . '/includes/components.php';
 $slug = (string)($_GET['slug'] ?? '');
 $p = CatalogRepository::findBySlug($slug);
@@ -30,29 +31,31 @@ foreach ($chain as $c) { $crumbs[] = ['name'=>$c['name'],'url'=>'/category/'.$c[
 $crumbs[] = ['name'=>$p['name']];
 $off = Helpers::percentOff((int)$p['price_cents'], (int)$p['compare_cents']);
 $rates = ShippingService::rates((string)(Session::get('checkout_country') ?: Helpers::setting('default_country','US')), (int)$p['weight_grams'], (int)$p['price_cents']);
+$delivery = DeliveryZoneService::publicSummary();
 $page = [
     'title'=>($p['seo_title'] ?: $p['name']) . ' · AllStore',
     'description'=>$p['seo_description'] ?: Helpers::truncate((string)$p['short_description'], 160),
     'og_image'=>$p['image_url'] ?: '/assets/img/hero-marketplace.jpg',
     'body_class'=>'page-product',
+    'extra_css'=>['/assets/css/product.css'],
 ];
 require APP_ROOT . '/includes/header.php';
 ?>
 <?= breadcrumbs($crumbs) ?>
 <section class="section" style="padding-top:var(--sp-4)" itemscope itemtype="https://schema.org/Product">
 <meta itemprop="sku" content="<?= Helpers::e($p['sku']) ?>">
-<div class="container"><div class="pdp-layout">
-  <div>
+<div class="container"><div class="pdp-shell"><div class="pdp-layout">
+  <div class="pdp-gallery-wrap">
     <div class="gallery">
       <div class="gallery-thumbs">
         <?php foreach ($images as $i=>$im): ?><button type="button" data-gallery-thumb="<?= Helpers::e($im['url']) ?>" data-alt="<?= Helpers::e($im['alt'] ?? $p['name']) ?>" class="<?= $i===0?'active':'' ?>" aria-label="View image <?= $i+1 ?>"><img src="<?= Helpers::e($im['url']) ?>" alt="" loading="lazy"></button><?php endforeach; ?>
       </div>
-      <div class="gallery-main" data-gallery-main><img src="<?= Helpers::e($images[0]['url']) ?>" alt="<?= Helpers::e($p['name']) ?>" itemprop="image" id="pdpMainImage"></div>
+      <div class="gallery-main" data-gallery-main><span class="pdp-gallery-badge"><?= icon('check-circle',13) ?> Quality checked</span><img src="<?= Helpers::e($images[0]['url']) ?>" alt="<?= Helpers::e($p['name']) ?>" itemprop="image" id="pdpMainImage"></div>
     </div>
     <?php if (!empty($p['video_url'])): ?><div style="margin-top:var(--sp-4)"><video controls style="width:100%;border-radius:var(--radius)" src="<?= Helpers::e($p['video_url']) ?>"></video></div><?php endif; ?>
   </div>
   <div class="pdp-summary">
-    <span class="eyebrow"><?= Helpers::e($p['brand_name'] ?? 'AllStore') ?></span>
+    <div class="pdp-kicker"><span class="eyebrow"><?= Helpers::e($p['brand_name'] ?? 'AllStore') ?></span><?php if (!empty($p['category_name'])): ?><span class="badge badge-brand"><?= Helpers::e($p['category_name']) ?></span><?php endif; ?></div>
     <h1 itemprop="name" style="margin-top:8px"><?= Helpers::e($p['name']) ?></h1>
     <div class="pdp-meta" style="margin-top:12px">
       <span><?= stars((float)$p['rating_avg']) ?> <a href="#reviews" class="text-brand"><?= (int)$p['rating_count'] ?> reviews</a></span>
@@ -65,9 +68,9 @@ require APP_ROOT . '/includes/header.php';
       <?php if ($off > 0): ?><span class="was" data-pdp-compare><?= Helpers::money((int)$p['compare_cents']) ?></span><span class="badge badge-danger">-<?= $off ?>%</span><?php endif; ?>
       <link itemprop="availability" href="<?= (int)$p['stock'] > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock' ?>">
     </div>
-    <p class="text-muted" style="font-size:var(--fs-sm)"><?= Helpers::e($p['short_description']) ?></p>
+    <p class="pdp-short text-muted"><?= Helpers::e($p['short_description']) ?></p>
     <div class="pdp-block">
-      <div class="row-between"><strong data-pdp-stock class="<?= (int)$p['stock'] > 0 ? 'text-success' : 'text-danger' ?>"><?= (int)$p['is_digital'] === 1 ? 'Digital delivery — unlimited availability' : ((int)$p['stock'] > 0 ? 'In stock ('.(int)$p['stock'].' available)' : 'Out of stock') ?></strong><span class="text-muted" style="font-size:12px"><?= (int)$p['is_digital'] === 1 ? 'Delivered to your email — no courier needed' : 'Ships from our main warehouse' ?></span></div>
+      <div class="pdp-stock-card row-between"><strong data-pdp-stock class="<?= (int)$p['stock'] > 0 ? 'text-success' : 'text-danger' ?>"><?= (int)$p['is_digital'] === 1 ? 'Digital delivery — unlimited availability' : ((int)$p['stock'] > 0 ? 'In stock ('.(int)$p['stock'].' available)' : 'Out of stock') ?></strong><span class="text-muted" style="font-size:12px"><?= (int)$p['is_digital'] === 1 ? 'Delivered to your email — no courier needed' : 'Ships from our main warehouse' ?></span></div>
     </div>
     <?php if ($variants !== []): ?>
     <div class="pdp-block"><h4>Choose an option</h4>
@@ -82,7 +85,7 @@ require APP_ROOT . '/includes/header.php';
     </div>
     <?php else: ?><input type="hidden" data-pdp-variant value=""><?php endif; ?>
     <?php if (!empty($meta['custom_options'])): ?>
-    <div class="pdp-block"><h4><?= $meta['kind'] === 'custom' ? 'Customise your order' : 'Order details' ?></h4>
+    <div class="pdp-block pdp-custom"><h4><?= $meta['kind'] === 'custom' ? 'Customise your order' : 'Order details' ?></h4>
       <?php foreach ($meta['custom_options'] as $option):
         $fieldId = 'custom_' . $option['slug'];
         $label = Helpers::e($option['label']) . (!empty($option['required']) ? ' *' : '');
@@ -113,13 +116,20 @@ require APP_ROOT . '/includes/header.php';
       <button type="button" class="btn btn-outline btn-lg" data-wishlist="<?= Helpers::e($p['id']) ?>" aria-label="Save to wishlist" style="flex:0 0 50px;padding:0" ><?= icon('heart',18) ?></button>
       <button type="button" class="btn btn-outline btn-lg" data-compare="<?= Helpers::e($p['id']) ?>" data-compare-name="<?= Helpers::e($p['name']) ?>" aria-label="Add to compare" style="flex:0 0 50px;padding:0"><?= icon('sliders',18) ?></button>
     </div>
+    <?php if ($delivery['enabled']): ?>
+    <div class="pdp-delivery-card">
+      <?= icon('truck',20) ?>
+      <div><strong>Delivery in Bangladesh</strong><span>Exact charge is calculated automatically at checkout from your area.</span></div>
+      <span class="charge">From <?= Helpers::money((int)$delivery['minimum_charge_cents']) ?></span>
+    </div>
+    <?php endif; ?>
     <div class="trust-row">
       <div class="trust-item"><?= icon('truck',18) ?><div><strong>Fast delivery</strong><span><?= Helpers::e($rates[0]['estimate'] ?? '3–6 business days') ?></span></div></div>
       <div class="trust-item"><?= icon('rotate',18) ?><div><strong><?= (int)$p['return_days'] ?>-day returns</strong><span><?= (int)$p['return_eligible'] ? 'Eligible for return' : 'Final sale' ?></span></div></div>
       <div class="trust-item"><?= icon('shield',18) ?><div><strong><?= Helpers::e($p['warranty'] ?: 'Quality checked') ?></strong><span>Secure checkout</span></div></div>
     </div>
   </div>
-</div></div>
+</div></div></div>
 <div class="container" style="margin-top:var(--sp-10)">
   <div class="pdp-tabs" role="tablist">
     <button type="button" class="active" data-tab="description" role="tab">Description</button>

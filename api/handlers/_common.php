@@ -121,7 +121,7 @@ function api_formatted_totals(array $t): array
 {
     return [
         'subtotal'=>Helpers::money((int)($t['subtotal_cents'] ?? 0)),
-        'discount'=>'−'.Helpers::money((int)($t['discount_cents'] ?? 0)),
+        'discount'=>((int)($t['discount_cents'] ?? 0) > 0 ? '−' : '') . Helpers::money((int)($t['discount_cents'] ?? 0)),
         'shipping'=>Helpers::money((int)($t['shipping_cents'] ?? 0)),
         'tax'=>Helpers::money((int)($t['tax_cents'] ?? 0)),
         'total'=>Helpers::money((int)($t['total_cents'] ?? 0)),

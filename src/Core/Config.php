@@ -41,7 +41,7 @@ final class Config
                 'debug' => $env !== 'production' && Env::bool('APP_DEBUG', true),
                 'url' => static::appUrl(),
                 'timezone' => Env::get('APP_TIMEZONE', 'UTC') ?: 'UTC',
-                'currency' => strtoupper(Env::get('APP_CURRENCY', 'USD') ?: 'USD'),
+                'currency' => strtoupper(Env::get('APP_CURRENCY', 'BDT') ?: 'BDT'),
                 'locale' => Env::get('APP_LOCALE', 'en') ?: 'en',
                 'root' => $root,
             ],

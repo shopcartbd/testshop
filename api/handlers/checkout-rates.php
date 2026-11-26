@@ -22,8 +22,16 @@ $rates = array_map(static function (array $rate): array {
     $rate['cost_label'] = Helpers::money((int)($rate['cost_cents'] ?? 0));
     return $rate;
 }, ShippingService::rates($country, $weight, $subtotal, $location));
+$zoneRate = $rates[0] ?? [];
 Response::ok('Delivery options updated.', [
     'rates' => $rates,
+    'zone' => [
+        'key' => (string)($zoneRate['zone_key'] ?? ''),
+        'label' => (string)($zoneRate['zone_label'] ?? ''),
+        'cost_label' => (string)($zoneRate['cost_label'] ?? Helpers::money(0)),
+        'note' => (string)($zoneRate['zone_note'] ?? ''),
+        'free' => (bool)($zoneRate['free'] ?? false),
+    ],
     'totals' => api_formatted_totals($totals),
     'country' => $country,
     'location' => $location,

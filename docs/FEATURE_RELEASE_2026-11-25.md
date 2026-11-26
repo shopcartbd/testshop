@@ -95,3 +95,5 @@ Updated: checkout, cart, product page, order confirmation, customer order detail
 - Headless Chromium **8/8** checks: add-to-cart, BD cascade auto-fill, live rate response, shipping method selection, admin order media, exact custom selections, and zero console/page errors. Screenshots: `/home/user/checkout_bd_local.png`, `/home/user/admin_order_media_local.png`.
 
 These are local-source results. Live GitHub/Vercel promotion and REST/browser verification are recorded in the workspace handoff; live Supabase Storage signed URLs, real payment webhooks and full device QA remain outside this local verification.
+
+A later UI/delivery-charge follow-up added the professional checkout/product styling, copyable admin address, organised admin menu and the three Bangladesh delivery-charge zones. See `docs/UI_DELIVERY_RELEASE_2026-11-25.md`.

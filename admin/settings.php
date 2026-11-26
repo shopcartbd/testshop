@@ -47,6 +47,7 @@ if (Request::isPost()) {
     Response::redirect('/admin/settings');
 }
 admin_header(['title'=>'Settings','subtitle'=>'Storefront identity, contact details and checkout defaults','active'=>'settings']);
+echo '<div class="card card-pad" style="margin-bottom:16px;background:linear-gradient(120deg,#f2f8f5,#fff)"><div class="row-between wrap"><div><h3 style="font-size:15px;margin-bottom:4px">Bangladesh delivery setup</h3><span class="field-hint">Delivery charges and division/district/thana selectors are managed on dedicated screens.</span></div><div class="row wrap" style="gap:7px"><a class="btn btn-primary btn-sm" href="/admin/delivery-charges">'.icon('banknote',14).'Delivery charges</a><a class="btn btn-outline btn-sm" href="/admin/locations">'.icon('map',14).'Bangladesh areas</a><a class="btn btn-outline btn-sm" href="/admin/setup-guide">'.icon('sparkles',14).'Setup guide</a></div></div></div>';
 echo '<div class="card card-pad"><h3 style="margin-bottom:16px">General settings</h3><form method="post">'.Session::csrfField().'<div class="form-grid">';
 foreach($fields as $key=>[$label,$type,$default]) {
     $v=Helpers::setting($key,$default);

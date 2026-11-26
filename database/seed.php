@@ -11,6 +11,7 @@ require_once __DIR__ . '/../includes/bootstrap.php';
 use AllStore\Core\Database;
 use AllStore\Core\Helpers;
 use AllStore\Core\Config;
+use AllStore\Services\DeliveryZoneService;
 
 if (PHP_SAPI !== 'cli') { http_response_code(403); exit('CLI only.'); }
 if (!function_exists('allstore_seed_output')) {
@@ -53,14 +54,15 @@ foreach (array_slice($perms,0,9) as $p) { allstore_seed_row('role_permissions', 
 /* --------------------------------------------------------------- settings */
 $settings = [
     'store_name'=>(string)Config::get('app.name'), 'store_tagline'=>'Everything you need, thoughtfully curated.',
-    'announcement_text'=>'Complimentary shipping on orders over $75  •  New arrivals every week',
-    'announcement_enabled'=>'1', 'contact_email'=>'hello@allstore.example', 'contact_phone'=>'+1 555 010 2040',
-    'store_address'=>'24 Market Street, Suite 200, San Francisco, CA', 'default_country'=>'BD', 'checkout_default_country'=>'BD',
+    'announcement_text'=>'Delivery across Bangladesh  •  New arrivals every week',
+    'announcement_enabled'=>'1', 'contact_email'=>'hello@allstore.example', 'contact_phone'=>'+880 1700 000 000',
+    'store_address'=>'Dhanmondi, Dhaka 1205, Bangladesh', 'default_country'=>'BD', 'checkout_default_country'=>'BD',
     'default_shipping_cents'=>'799', 'cod_enabled'=>'1', 'free_shipping_threshold_cents'=>'7500',
     'currency'=>(string)Config::get('app.currency'), 'footer_about'=>'A modern marketplace for considered everyday goods.',
     'social_instagram'=>'https://instagram.com', 'social_x'=>'https://x.com', 'social_facebook'=>'https://facebook.com',
     'newsletter_heading'=>'Stay in the loop', 'newsletter_text'=>'New arrivals, editorial picks and member-only offers. No noise.',
     'maintenance_mode'=>'0', 'seeded_v1'=>'1', 'bootstrap_completed'=>'0',
+    'delivery_zone_config_json'=>Helpers::json(DeliveryZoneService::defaultConfig()),
 ];
 foreach ($settings as $k=>$v) { allstore_seed_row('settings', ['key'=>$k,'value'=>$v,'group_name'=>'general','updated_at'=>$now]); }
 

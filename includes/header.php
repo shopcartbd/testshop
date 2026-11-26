@@ -9,6 +9,7 @@ use AllStore\Core\Session;
 use AllStore\Models\CatalogRepository;
 use AllStore\Models\CustomerRepository;
 use AllStore\Services\CartService;
+use AllStore\Services\DeliveryZoneService;
 
 require_once __DIR__ . '/components.php';
 $page = array_merge([
@@ -24,6 +25,11 @@ $wishCount = Auth::id() ? CustomerRepository::wishlistCount((string)Auth::id()) 
 $canonical = $page['canonical'] ?: rtrim((string)Config::get('app.url'), '/') . Request::path();
 $current = Request::path();
 $announcement = Helpers::setting('announcement_text', '');
+// Replace only the original placeholder USD promo; admin-edited announcements are preserved.
+if (str_contains($announcement, '$75') || stripos($announcement, 'complimentary shipping on orders over') !== false) {
+    $announcement = DeliveryZoneService::publicHeadline() . '  •  New arrivals every week';
+}
+$deliveryHeadline = DeliveryZoneService::publicHeadline();
 $annEnabled = Helpers::setting('announcement_enabled', '1') === '1';
 ?><!doctype html>
 <html lang="<?= Helpers::e((string)Config::get('app.locale')) ?>">
@@ -46,6 +52,7 @@ $annEnabled = Helpers::setting('announcement_enabled', '1') === '1';
 <link rel="stylesheet" href="/assets/css/tokens.css">
 <link rel="stylesheet" href="/assets/css/app.css">
 <link rel="stylesheet" href="/assets/css/responsive.css">
+<?php foreach ((array)($page['extra_css'] ?? []) as $extraCss): ?><link rel="stylesheet" href="<?= Helpers::e((string)$extraCss) ?>"><?php endforeach; ?>
 </head>
 <body class="<?= Helpers::e((string)$page['body_class']) ?>" data-csrf="<?= Helpers::e(Session::csrfToken()) ?>" data-logged-in="<?= Auth::check() ? '1' : '0' ?>" data-currency-symbol="<?= Helpers::e(Helpers::currencySymbol()) ?>">
 <a class="visually-hidden" href="#main">Skip to content</a>
@@ -87,7 +94,7 @@ $annEnabled = Helpers::setting('announcement_enabled', '1') === '1';
       <a href="/brands">Brands</a>
       <a href="/blog">Journal</a>
     </div>
-    <div class="nav-extra"><?= icon('truck',15) ?> Free shipping over <?= Helpers::money((int)Helpers::setting('free_shipping_threshold_cents','7500')) ?></div>
+    <div class="nav-extra"><?= icon('truck',15) ?> <?= Helpers::e($deliveryHeadline) ?></div>
   </div></nav>
 </header>
 

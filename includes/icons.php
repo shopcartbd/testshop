@@ -73,6 +73,11 @@ function icon(string $name, int $size = 20, string $class = ''): string
         'globe' => '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 3.8 5.6 3.8 9S14.5 18.5 12 21c-2.5-2.5-3.8-5.6-3.8-9S9.5 5.5 12 3Z"/>',
         'award' => '<circle cx="12" cy="8" r="5"/><path d="m8.5 13-1.5 8 5-2.5 5 2.5-1.5-8"/>',
         'leaf' => '<path d="M20 4C10 4 4 8 4 15a5 5 0 0 0 5 5c7 0 11-6 11-16Z"/><path d="M4 20c3-5 7-8 12-10"/>',
+        'copy' => '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+        'clipboard-check' => '<rect x="6" y="5" width="12" height="16" rx="2"/><path d="M9 5V4h6v1M9 14l2 2 4-4"/>',
+        'trending' => '<path d="m3 17 6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
+        'banknote' => '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 10h.01M18 14h.01"/>',
+        'map' => '<path d="m3 6 6-2 6 2 6-2v14l-6 2-6-2-6 2V6Z"/><path d="M9 4v14M15 6v14"/>',
     ];
     $inner = $map[$name] ?? $map['box'];
     $cls = $class !== '' ? ' class="' . \AllStore\Core\Helpers::e($class) . '"' : '';

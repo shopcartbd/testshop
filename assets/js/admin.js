@@ -14,6 +14,37 @@
     if (e.target.closest('.admin-nav a')) qs('.admin-sidebar')?.classList.remove('open');
   });
 
+  /* ------------------------------------------------- copy shipping address */
+  const fallbackCopy = (text) => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (_) { /* no-op */ }
+    ta.remove();
+  };
+  qsa('[data-copy-address]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const text = btn.dataset.copyAddress || '';
+      if (!text) return;
+      try {
+        if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(text);
+        else fallbackCopy(text);
+        const original = btn.innerHTML;
+        btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px">✓ Copied</span>';
+        btn.classList.add('copied');
+        window.AllStore?.toast?.('success', 'Shipping address copied.');
+        window.setTimeout(() => { btn.innerHTML = original; btn.classList.remove('copied'); }, 1600);
+      } catch (_) {
+        fallbackCopy(text);
+        window.AllStore?.toast?.('error', 'Copy failed. Select the address manually.');
+      }
+    });
+  });
+
   /* ------------------------------------------------------ bulk selection */
   const selectAll = qs('[data-select-all]');
   selectAll?.addEventListener('change', () => {
