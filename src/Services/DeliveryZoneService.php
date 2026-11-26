@@ -37,6 +37,9 @@ final class DeliveryZoneService
                 'outside_dhaka' => 12000,  // ৳120.00
             ],
             'free_over' => 0, // cents; 0 disables the free-delivery threshold
+            // When the store default is BD, checkout asks only for name, phone,
+            // district, thana and the full address. Admin can turn this off.
+            'simple_bd_checkout' => 1,
             'city_matches' => [
                 // Dhaka city thanas only. Generic “Dhaka” terms were removed so
                 // same-named upazilas in other divisions (e.g. Kushtia Mirpur)
@@ -103,6 +106,13 @@ final class DeliveryZoneService
         return (int)(self::all()['enabled'] ?? 1) === 1;
     }
 
+    /** Simplified name/phone/district/thana/address checkout for BD stores. */
+    public static function simpleCheckoutEnabled(): bool
+    {
+        $country = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', Helpers::setting('checkout_default_country', 'BD')) ?: 'BD', 0, 2));
+        return $country === 'BD' && (int)(self::all()['simple_bd_checkout'] ?? 0) === 1;
+    }
+
     public static function normalize(array $in): array
     {
         $default = self::defaultConfig();
@@ -114,6 +124,7 @@ final class DeliveryZoneService
             $out['rates'][$zone] = max(0, min(10000000, (int)($rates[$zone] ?? $default['rates'][$zone])));
         }
         $out['free_over'] = max(0, min(10000000, (int)($in['free_over'] ?? 0)));
+        $out['simple_bd_checkout'] = array_key_exists('simple_bd_checkout', $in) ? ((int)$in['simple_bd_checkout'] ? 1 : 0) : (int)$default['simple_bd_checkout'];
         $out['city_matches'] = self::lines($in['city_matches'] ?? $default['city_matches']);
         $out['sub_area_matches'] = self::lines($in['sub_area_matches'] ?? $default['sub_area_matches']);
         $out['outside_matches'] = self::lines($in['outside_matches'] ?? []);
@@ -137,6 +148,7 @@ final class DeliveryZoneService
                 'outside_dhaka' => $money('charge_outside_dhaka', $default['rates']['outside_dhaka']),
             ],
             'free_over' => $money('free_over', $default['free_over']),
+            'simple_bd_checkout' => !empty($in['simple_bd_checkout']) ? 1 : 0,
             'city_matches' => $in['city_matches'] ?? $default['city_matches'],
             'sub_area_matches' => $in['sub_area_matches'] ?? $default['sub_area_matches'],
             'outside_matches' => $in['outside_matches'] ?? [],
@@ -168,6 +180,7 @@ final class DeliveryZoneService
         }
         return [
             'enabled' => (int)$config['enabled'] === 1,
+            'simple_checkout' => self::simpleCheckoutEnabled(),
             'free_over_cents' => (int)$config['free_over'],
             'free_over_label' => Helpers::money((int)$config['free_over']),
             'minimum_charge_cents' => min(array_map('intval', $config['rates'])),

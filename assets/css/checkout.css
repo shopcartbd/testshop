@@ -60,3 +60,9 @@
   .checkout-summary.card { padding: var(--sp-4) !important; }
   .checkout-trust span { font-size: 10px; }
 }
+
+/* Simplified Bangladesh checkout */
+.checkout-step .textarea { min-height: 92px; resize: vertical; line-height: 1.55; }
+.checkout-step select[hidden], .checkout-step input[hidden] { display: none !important; }
+.checkout-step .field .checkbox { min-height: 46px; }
+.checkout-summary.card { align-self: start; }

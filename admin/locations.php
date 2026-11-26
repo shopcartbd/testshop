@@ -170,7 +170,8 @@ if ($editLevel === 'division' && $editDivision !== '') {
 $val = static fn(string $k,string $d='') => Helpers::e((string)($edit[$k] ?? $d));
 $csrf = Session::csrfField();
 
-admin_header(['title'=>'Bangladesh delivery areas','subtitle'=>'বিভাগ · জেলা · উপজেলা / থানা — customers select these at checkout','active'=>'locations']);
+admin_header(['title'=>'Bangladesh delivery areas','active'=>'locations']);
+echo '<div class="row-between wrap" style="margin-bottom:14px"><strong>Divisions · districts · upazilas / thanas</strong><a class="btn btn-outline btn-sm" href="/admin/delivery-charges">Delivery charges '.icon('banknote',14).'</a></div>';
 echo '<div class="stat-grid" style="margin-bottom:16px">';
 foreach (['Divisions'=>$counts['divisions'],'Districts'=>$counts['districts'],'Upazilas / thanas'=>$counts['areas'],'Active areas'=>$counts['active_areas']] as $label=>$n) {
     echo '<div class="stat-card"><div class="stat-label">'.Helpers::e($label).'</div><div class="stat-value">'.(int)$n.'</div></div>';
@@ -212,5 +213,5 @@ foreach ($data['divisions'] as $d) {
     echo '</details>';
 }
 echo '</div></div>';
-echo '<div class="alert alert-info" style="margin-top:16px">'.icon('info',16).'<span>Bundled reference data: Open Admin Data, 8 divisions / 64 districts / 495 upazilas, CC-BY-4.0. <a class="text-brand" href="https://github.com/open-admin-data/bangladesh-administrative-divisions" target="_blank" rel="noopener">Source and attribution</a>. Add city thanas here and they appear at checkout instantly. Next: set <a class="text-brand" href="/admin/delivery-charges">Delivery charges</a> for ঢাকা / সাব-এরিয়া / ঢাকার বাহিরে, or open the <a class="text-brand" href="/admin/setup-guide">Setup guide</a>.</span></div>';
+echo '<p class="field-hint" style="margin-top:14px">Open Admin Data · CC-BY-4.0 · <a class="text-brand" href="https://github.com/open-admin-data/bangladesh-administrative-divisions" target="_blank" rel="noopener">Source</a></p>';
 admin_footer();

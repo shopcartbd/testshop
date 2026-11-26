@@ -67,7 +67,7 @@ function admin_resource_page(array $cfg): void
     $page = max(1, Request::int('page',1,1,10000)); $per = 25; $off = ($page-1)*$per;
     $rows = Database::all($sql . (str_contains(strtoupper($sql), ' WHERE ') ? ' AND ' : ' WHERE ') . $w . ' ORDER BY ' . ($cfg['order'] ?? 'created_at DESC') . " LIMIT $per OFFSET $off", $params);
     admin_header(['title'=>$title,'subtitle'=>$subtitle,'active'=>$active]);
-    echo '<div class="admin-page-head"><div><h2>'.Helpers::e($title).'</h2><p>'.Helpers::e($subtitle).'</p></div>';
+    echo '<div class="admin-page-head">';
     if (!empty($cfg['create_url'])) { echo '<a class="btn btn-primary" href="'.Helpers::url($cfg['create_url']).'">'.icon('plus',16).Helpers::e($cfg['create_label'] ?? 'Add new').'</a>'; }
     echo '</div>';
     echo '<form class="admin-toolbar" method="get"><input class="input" type="search" name="q" value="'.Helpers::e($q).'" placeholder="'.Helpers::e($cfg['search_placeholder'] ?? 'Search…').'">';

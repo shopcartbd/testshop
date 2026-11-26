@@ -30,5 +30,4 @@ if (Request::isPost()) {
 <div class="field"><label for="email">Email address</label><input class="input" type="email" id="email" name="email" required autocomplete="username"></div>
 <div class="field"><label for="password">Password</label><input class="input" type="password" id="password" name="password" required autocomplete="current-password"></div>
 <button class="btn btn-primary btn-block btn-lg" type="submit">Sign in <?= icon('arrow-right',16) ?></button></form>
-<p class="field-hint" style="margin-top:18px">There is no default password. Run <code>scripts/bootstrap_admin.php</code> once with server-side environment variables to create the first administrator.</p>
 <a class="section-link" style="margin-top:14px;display:inline-flex" href="/"><?= icon('arrow-left',14) ?> Back to store</a></div></main></body></html>

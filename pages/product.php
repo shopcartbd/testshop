@@ -119,15 +119,9 @@ require APP_ROOT . '/includes/header.php';
     <?php if ($delivery['enabled']): ?>
     <div class="pdp-delivery-card">
       <?= icon('truck',20) ?>
-      <div><strong>Delivery in Bangladesh</strong><span>Exact charge is calculated automatically at checkout from your area.</span></div>
-      <span class="charge">From <?= Helpers::money((int)$delivery['minimum_charge_cents']) ?></span>
+      <div><strong>Delivery</strong><span>Calculated at checkout</span></div>
     </div>
     <?php endif; ?>
-    <div class="trust-row">
-      <div class="trust-item"><?= icon('truck',18) ?><div><strong>Fast delivery</strong><span><?= Helpers::e($rates[0]['estimate'] ?? '3–6 business days') ?></span></div></div>
-      <div class="trust-item"><?= icon('rotate',18) ?><div><strong><?= (int)$p['return_days'] ?>-day returns</strong><span><?= (int)$p['return_eligible'] ? 'Eligible for return' : 'Final sale' ?></span></div></div>
-      <div class="trust-item"><?= icon('shield',18) ?><div><strong><?= Helpers::e($p['warranty'] ?: 'Quality checked') ?></strong><span>Secure checkout</span></div></div>
-    </div>
   </div>
 </div></div></div>
 <div class="container" style="margin-top:var(--sp-10)">

@@ -25,5 +25,4 @@ $checks = [
 admin_header(['title'=>'System health','subtitle'=>'Runtime and integration status, with no secrets displayed','active'=>'dashboard']);
 echo '<div class="card card-pad"><h3 style="margin-bottom:16px">Checks</h3>';
 foreach ($checks as [$label,$value,$ok]) { echo '<div class="order-row"><div class="grow"><strong style="font-size:13px">'.Helpers::e($label).'</strong><div class="text-subtle" style="font-size:11px">'.Helpers::e($value).'</div></div><span class="badge '.($ok?'badge-success':'badge-danger').'">'.($ok?'OK':'Check').'</span></div>'; }
-echo '</div><div class="alert alert-info" style="margin-top:16px">'.icon('info',16).'<span>This page never prints credentials, DSNs, API keys or raw exception details. Use the public <a href="/api/health">/api/health</a> endpoint for a minimal JSON readiness probe.</span></div>';
 admin_footer();

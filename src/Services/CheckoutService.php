@@ -58,6 +58,13 @@ final class CheckoutService
         $postal = trim((string)($in['postal_code'] ?? ''));
         $countryInput = (string)($in['country'] ?? '');
         $country = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $countryInput) ?: LocationService::defaultCountry(), 0, 2));
+        $simpleBd = DeliveryZoneService::simpleCheckoutEnabled() && $country === 'BD';
+        // The simplified BD form has no email field; derive a stable placeholder
+        // from the phone so orders, invoices and duplicate detection still work.
+        if ($simpleBd && $email === '') {
+            $digits = preg_replace('/\D/', '', $phone) ?: '0000000';
+            $email = 'bd' . substr($digits, -12) . '@phone.local';
+        }
         $note = mb_substr(trim((string)($in['customer_note'] ?? '')), 0, 1000);
         $method = (string)($in['payment_method'] ?? 'cod');
         $shipMethod = (string)($in['shipping_method'] ?? 'standard');
@@ -70,7 +77,7 @@ final class CheckoutService
 
         $errors = (array)($resolved['errors'] ?? []);
         if (mb_strlen($name) < 2) { $errors['full_name'] = 'Full name is required.'; }
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) { $errors['email'] = 'A valid email is required.'; }
+        if (!$simpleBd && !filter_var($email, FILTER_VALIDATE_EMAIL)) { $errors['email'] = 'A valid email is required.'; }
         if (strlen(preg_replace('/\D/', '', $phone) ?? '') < 7) { $errors['phone'] = 'A valid phone number is required.'; }
 
         $idem = self::idempotencyKey(isset($in['idem']) ? (string)$in['idem'] : null);
@@ -99,7 +106,7 @@ final class CheckoutService
         if ($needsShipping && mb_strlen($line1) < 4) { $errors['line1'] = 'Street address is required.'; }
         if ($needsShipping && mb_strlen($city) < 2 && $location['area'] === '') { $errors['city'] = 'City or delivery area is required.'; }
         if ($needsShipping && $country === 'BD' && $location['area_id'] === '') {
-            $errors['area_id'] = 'Select your division, district and upazila/thana for delivery.';
+            $errors['area_id'] = $simpleBd ? 'Select district and thana for delivery.' : 'Select your division, district and upazila/thana for delivery.';
         }
         if ($errors) { throw new AppException('Please correct the highlighted fields.', 422, $errors); }
         if (!PaymentService::isAvailable($method)) { throw new AppException('The selected payment method is unavailable.', 422); }
@@ -121,7 +128,7 @@ final class CheckoutService
         // city/region columns remain populated for couriers, invoices and CSVs.
         if ($city === '' && $location['area'] !== '') { $city = $location['area']; }
         if ($region === '' && $location['division'] !== '') { $region = trim($location['division'] . ' / ' . $location['district']); }
-        if ($line2 === '' && $location['district'] !== '') { $line2 = $location['district'] . ($location['area_type'] !== '' ? ' · ' . $location['area_type'] : ''); }
+        if (!$simpleBd && $line2 === '' && $location['district'] !== '') { $line2 = $location['district'] . ($location['area_type'] !== '' ? ' · ' . $location['area_type'] : ''); }
         $address = Helpers::json([
             'full_name'=>$name, 'line1'=>$line1, 'line2'=>$line2, 'city'=>$city,
             'region'=>$region, 'postal_code'=>$postal, 'country'=>$country, 'phone'=>$phone,

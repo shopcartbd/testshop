@@ -33,7 +33,7 @@ if (Request::isPost()) {
 $f=['q'=>Request::str('q','',80),'status'=>Request::str('status','',20),'page'=>Request::int('page',1,1,10000)];
 $res=CustomerRepository::allCustomers($f);
 admin_header(['title'=>'Customers','subtitle'=>'Accounts, lifetime value and status control','active'=>'customers']);
-echo '<div class="admin-page-head"><div><h2>Customers</h2><p>'.$res['total'].' accounts. Password hashes are never displayed or exported.</p></div><a class="btn btn-outline btn-sm" href="?export=csv">'.icon('download',15).'Export CSV</a></div>';
+echo '<div class="admin-page-head"><a class="btn btn-outline btn-sm" href="?export=csv">'.icon('download',15).'Export CSV</a></div>';
 echo '<form class="admin-toolbar" method="get"><input class="input" type="search" name="q" value="'.Helpers::e($f['q']).'" placeholder="Name or email…"><select class="select" name="status"><option value="">All statuses</option><option value="active"'.($f['status']==='active'?' selected':'').'>Active</option><option value="suspended"'.($f['status']==='suspended'?' selected':'').'>Suspended</option></select><button class="btn btn-outline" type="submit">'.icon('search',15).'Search</button></form>';
 echo '<div class="card"><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Customer</th><th>Phone</th><th>Orders</th><th>Lifetime value</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead><tbody>';
 foreach ($res['items'] as $c) {

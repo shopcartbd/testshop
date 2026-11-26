@@ -54,7 +54,7 @@ foreach (array_slice($perms,0,9) as $p) { allstore_seed_row('role_permissions', 
 /* --------------------------------------------------------------- settings */
 $settings = [
     'store_name'=>(string)Config::get('app.name'), 'store_tagline'=>'Everything you need, thoughtfully curated.',
-    'announcement_text'=>'Delivery across Bangladesh  •  New arrivals every week',
+    'announcement_text'=>'New arrivals every week',
     'announcement_enabled'=>'1', 'contact_email'=>'hello@allstore.example', 'contact_phone'=>'+880 1700 000 000',
     'store_address'=>'Dhanmondi, Dhaka 1205, Bangladesh', 'default_country'=>'BD', 'checkout_default_country'=>'BD',
     'default_shipping_cents'=>'799', 'cod_enabled'=>'1', 'free_shipping_threshold_cents'=>'7500',

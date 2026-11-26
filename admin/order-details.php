@@ -72,18 +72,16 @@ $copyLines=[
     'Order: '.(string)$number,
     'Customer: '.(string)($order['customer_name'] ?? ''),
     'Phone: '.(string)($order['customer_phone'] ?? ($addr['phone'] ?? '')),
-    'Email: '.(string)($order['customer_email'] ?? ''),
 ];
-foreach ([
-    'Address' => [$addr['line1'] ?? '', $addr['line2'] ?? ''],
-    'Area' => [$addr['area'] ?? '', $addr['city'] ?? ''],
-    'District' => [$addr['district'] ?? ''],
-    'Division' => [$addr['division'] ?? '', $addr['region'] ?? ''],
-    'Post / Country' => [$addr['postal_code'] ?? '', $addr['country'] ?? ''],
-] as $label=>$parts) {
-    $parts=array_values(array_filter(array_map(static fn($v)=>trim((string)$v),$parts),static fn($v)=>$v!==''));
-    if ($parts !== []) { $copyLines[]=$label.': '.implode(', ',array_unique($parts)); }
-}
+$realEmail=(string)($order['customer_email'] ?? '');
+if ($realEmail !== '' && !str_ends_with($realEmail,'@phone.local')) { $copyLines[]='Email: '.$realEmail; }
+$addressParts=array_values(array_filter([
+    trim((string)($addr['line1'] ?? '')), trim((string)($addr['line2'] ?? '')),
+    trim((string)($addr['area'] ?? '')), trim((string)($addr['district'] ?? '')),
+    trim((string)($addr['division'] ?? '')), trim((string)($addr['postal_code'] ?? '')),
+    strtoupper((string)($addr['country'] ?? '')),
+], static fn($v)=>$v!==''));
+if ($addressParts !== []) { $copyLines[]='Address: '.implode(', ',array_unique($addressParts)); }
 if ($zoneInfo) { $copyLines[]='Delivery zone: '.$zoneInfo['label']; }
 $copyLines[]='Delivery charge: '.Helpers::money((int)$order['shipping_cents']);
 if (!empty($order['customer_note'])) { $copyLines[]='Note: '.(string)$order['customer_note']; }
@@ -113,46 +111,40 @@ foreach ($items as $it) {
     if (!empty($d['product_slug'])) { echo '<a class="btn btn-ghost btn-sm" href="/product/'.rawurlencode($d['product_slug']).'" target="_blank" rel="noopener noreferrer">Live product</a>'; }
     echo '</div></div><strong>'.Helpers::money((int)$it['total_cents']).'</strong></div>';
 }
-echo '<div style="margin-top:14px"><div class="summary-line"><span>Subtotal</span><strong>'.Helpers::money((int)$order['subtotal_cents']).'</strong></div><div class="summary-line"><span>Discount</span><strong>−'.Helpers::money((int)$order['discount_cents']).'</strong></div><div class="summary-line"><span>Shipping</span><strong>'.Helpers::money((int)$order['shipping_cents']).'</strong></div><div class="summary-line"><span>Tax</span><strong>'.Helpers::money((int)$order['tax_cents']).'</strong></div><div class="summary-line total"><span>Total</span><strong>'.Helpers::money((int)$order['total_cents']).'</strong></div></div></div>';
+echo '<div style="margin-top:14px"><div class="summary-line"><span>Subtotal</span><strong>'.Helpers::money((int)$order['subtotal_cents']).'</strong></div><div class="summary-line"><span>Discount</span><strong>'.((int)$order['discount_cents'] > 0 ? '−' : '').Helpers::money((int)$order['discount_cents']).'</strong></div><div class="summary-line"><span>Shipping</span><strong>'.Helpers::money((int)$order['shipping_cents']).'</strong></div><div class="summary-line"><span>Tax</span><strong>'.Helpers::money((int)$order['tax_cents']).'</strong></div><div class="summary-line total"><span>Total</span><strong>'.Helpers::money((int)$order['total_cents']).'</strong></div></div></div>';
 echo '<div class="card card-pad"><div class="row-between" style="margin-bottom:12px"><h3>Customer & delivery</h3><button type="button" class="address-copy-btn" data-copy-address="'.Helpers::e($copyText).'">'.icon('copy',14).' Copy address</button></div>';
-echo '<div class="address-card"><div class="address-card-head"><h4>'.icon('map-pin',15).' Shipping address</h4>'.($zoneInfo ? '<span class="zone-badge">'.Helpers::e($zoneInfo['label']).'</span>' : '').'</div><div class="address-grid">';
-$addressRows=[
-    'Full name'=>(string)($addr['full_name'] ?? $order['customer_name'] ?? ''),
-    'Phone'=>(string)($addr['phone'] ?? $order['customer_phone'] ?? ''),
-    'Street address'=>(string)($addr['line1'] ?? ''),
-    'Apartment / suite'=>(string)($addr['line2'] ?? ''),
-    'Division'=>(string)($addr['division'] ?? ''),
-    'District'=>(string)($addr['district'] ?? ''),
-    'Upazila / Thana'=>(string)($addr['area'] ?? ''),
-    'Area type'=>(string)($addr['area_type'] ?? ''),
-    'City'=>(string)($addr['city'] ?? ''),
-    'Region'=>(string)($addr['region'] ?? ''),
-    'Postal code'=>(string)($addr['postal_code'] ?? ''),
-    'Country'=>(string)($addr['country'] ?? ''),
-    'Email'=>(string)($order['customer_email'] ?? ''),
-];
-$rendered=0;
-foreach ($addressRows as $label=>$value) {
+echo '<div class="address-card"><div class="address-card-head"><h4>'.icon('map-pin',15).' Shipping address</h4>'.($zoneInfo ? '<span class="zone-badge">'.Helpers::e($zoneInfo['label']).'</span>' : '').'</div>';
+echo '<div class="address-clean"><div class="address-person"><span>Contact</span><strong>'.Helpers::e((string)($addr['full_name'] ?? $order['customer_name'] ?? '')).'</strong><div>'.Helpers::e((string)($addr['phone'] ?? $order['customer_phone'] ?? '')).'</div>';
+if ($realEmail !== '' && !str_ends_with($realEmail,'@phone.local')) { echo '<div>'.Helpers::e($realEmail).'</div>'; }
+echo '</div><div class="address-lines"><span>Delivery address</span>';
+$addressLines=[];
+foreach (['line1','line2'] as $k) { $v=trim((string)($addr[$k] ?? '')); if ($v!=='') { $addressLines[]=$v; } }
+$areaParts=array_values(array_filter([trim((string)($addr['area'] ?? '')),trim((string)($addr['district'] ?? '')),trim((string)($addr['division'] ?? ''))],static fn($v)=>$v!==''));
+if ($areaParts !== []) { $addressLines[]=implode(', ',array_unique($areaParts)); }
+$tailParts=array_values(array_filter([trim((string)($addr['postal_code'] ?? '')),strtoupper(trim((string)($addr['country'] ?? '')))],static fn($v)=>$v!==''));
+if ($tailParts !== []) { $addressLines[]=implode(', ',$tailParts); }
+if ($addressLines === []) { $addressLines[]='Digital order — no courier address'; }
+foreach ($addressLines as $line) { echo '<div>'.Helpers::e($line).'</div>'; }
+echo '</div></div>';
+echo '<div class="address-facts">';
+foreach (['District'=>(string)($addr['district'] ?? ''),'Thana'=>(string)($addr['area'] ?? ''),'Division'=>(string)($addr['division'] ?? '')] as $label=>$value) {
     if (trim($value)==='') { continue; }
-    $span=in_array($label,['Street address','Apartment / suite','Email'],true) ? ' span-2' : '';
-    echo '<div class="address-row'.$span.'"><span class="label">'.Helpers::e($label).'</span><span class="value">'.Helpers::e($value).'</span></div>';
-    $rendered++;
+    echo '<div><span>'.Helpers::e($label).'</span><strong>'.Helpers::e($value).'</strong></div>';
 }
-if ($rendered===0) {
-    echo '<div class="address-row span-2"><span class="label">Delivery</span><span class="value">Digital order — no courier address required</span></div>';
+if ($zoneInfo) {
+    echo '<div><span>Delivery zone</span><strong>'.Helpers::e($zoneInfo['label']).'</strong></div>';
+    echo '<div><span>Charge</span><strong>'.Helpers::money((int)$order['shipping_cents']).'</strong></div>';
+    echo '<div class="address-zone">'.icon('truck',15).'<span>Current zone rate '.Helpers::money((int)$zoneInfo['charge_cents']).'</span></div>';
 }
 echo '</div>';
-if ($zoneInfo) {
-    echo '<div class="address-zone">'.icon('truck',15).'<span><strong>'.Helpers::e($zoneInfo['label']).'</strong> · Applied delivery charge '.Helpers::money((int)$order['shipping_cents']).' · Current zone rate '.Helpers::money((int)$zoneInfo['charge_cents']).'</span></div>';
-}
-echo '<pre class="address-copy-preview">'.Helpers::e($copyText).'</pre></div>';
+echo '<details class="address-copy-details"><summary>Courier copy</summary><pre class="address-copy-preview">'.Helpers::e($copyText).'</pre></details></div>';
 if ($order['customer_note']) echo '<div class="alert alert-info" style="margin-top:12px">'.icon('message',16).'<span>'.Helpers::e($order['customer_note']).'</span></div>';
 echo '<hr><h4 style="margin-bottom:10px">Status transition</h4><form method="post">'.Session::csrfField().'<input type="hidden" name="action" value="status"><div class="form-grid"><div class="field"><label>New status</label><select class="select" name="status">';
 foreach (OrderRepository::STATUSES as $s) echo '<option value="'.$s.'" '.(($order['status']===$s)?'selected':'').'>'.Helpers::e(ucwords(str_replace('_',' ',$s))).'</option>';
 echo '</select></div><div class="field"><label>Note</label><input class="input" name="note" maxlength="500"></div></div><button class="btn btn-primary btn-sm" type="submit">Update status</button></form></div></div>';
 echo '<div class="admin-grid-2" style="margin-top:16px"><div class="card card-pad"><h3 style="margin-bottom:12px">Payment & shipment</h3><form method="post">'.Session::csrfField().'<input type="hidden" name="action" value="payment"><div class="row"><select class="select" name="payment_status">';
 foreach (['pending','paid','failed','refunded','cod_pending'] as $s) echo '<option value="'.$s.'" '.(($order['payment_status']===$s)?'selected':'').'>'.Helpers::e(ucwords(str_replace('_',' ',$s))).'</option>';
-echo '</select><button class="btn btn-outline btn-sm" type="submit">Confirm payment</button></div></form><p class="field-hint" style="margin:8px 0 14px">Stripe orders are marked paid only after a verified webhook. This control is for COD/manual reconciliation.</p>';
+echo '</select><button class="btn btn-outline btn-sm" type="submit">Confirm payment</button></div></form>';
 echo '<form method="post">'.Session::csrfField().'<input type="hidden" name="action" value="shipment"><div class="form-grid"><div class="field"><label>Courier</label><select class="select" name="courier_id"><option value="">— None —</option>';
 foreach ($couriers as $c) echo '<option value="'.Helpers::e($c['id']).'" '.((($shipment['courier_id'] ?? '')===$c['id'])?'selected':'').'>'.Helpers::e($c['name']).'</option>';
 echo '</select></div><div class="field"><label>Tracking number</label><input class="input" name="tracking_number" value="'.Helpers::e($shipment['tracking_number'] ?? '').'" maxlength="100"></div><div class="field"><label>Estimated delivery</label><input class="input" type="date" name="estimated_delivery" value="'.Helpers::e(substr((string)($shipment['estimated_delivery'] ?? ''),0,10)).'"></div><div class="field"><label>Shipment status</label><select class="select" name="shipment_status">';

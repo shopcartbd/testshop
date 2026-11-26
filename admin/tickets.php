@@ -40,7 +40,7 @@ $id=Request::str('id','',80); $ticket=null; foreach($tickets as $t) if($t['id']=
 if(!$ticket && $id!=='') $ticket=Database::first('SELECT * FROM support_tickets WHERE id=:i',['i'=>$id]);
 $messages=$ticket?SupportService::messages((string)$ticket['id']):[];
 admin_header(['title'=>'Support tickets','subtitle'=>'Private customer conversations and status workflow','active'=>'tickets']);
-echo '<div class="admin-page-head"><div><h2>Support inbox</h2><p>'.count($tickets).' tickets in this view.</p></div><form method="get"><select class="select" name="status"><option value="">All statuses</option>';
+echo '<div class="admin-page-head"><form method="get"><select class="select" name="status"><option value="">All statuses</option>';
 foreach(['open','pending','resolved','closed'] as $s) echo '<option value="'.$s.'" '.(Request::str('status','',20)===$s?'selected':'').'>'.ucfirst($s).'</option>';
 echo '</select><button class="btn btn-outline btn-sm" type="submit">Filter</button></form></div>';
 echo '<div class="admin-split"><div class="card"><div class="card-header"><h3>Tickets</h3></div><div class="admin-table-wrap" style="max-height:640px;overflow:auto"><table class="admin-table"><thead><tr><th>Subject</th><th>Customer</th><th>Status</th><th>Priority</th></tr></thead><tbody>';

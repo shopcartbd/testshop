@@ -9,7 +9,6 @@ use AllStore\Core\Session;
 use AllStore\Models\CatalogRepository;
 use AllStore\Models\CustomerRepository;
 use AllStore\Services\CartService;
-use AllStore\Services\DeliveryZoneService;
 
 require_once __DIR__ . '/components.php';
 $page = array_merge([
@@ -25,11 +24,11 @@ $wishCount = Auth::id() ? CustomerRepository::wishlistCount((string)Auth::id()) 
 $canonical = $page['canonical'] ?: rtrim((string)Config::get('app.url'), '/') . Request::path();
 $current = Request::path();
 $announcement = Helpers::setting('announcement_text', '');
-// Replace only the original placeholder USD promo; admin-edited announcements are preserved.
-if (str_contains($announcement, '$75') || stripos($announcement, 'complimentary shipping on orders over') !== false) {
-    $announcement = DeliveryZoneService::publicHeadline() . '  •  New arrivals every week';
+// Remove legacy delivery-charge promos from the storefront chrome.
+if (str_contains($announcement, '$75') || stripos($announcement, 'complimentary shipping on orders over') !== false
+    || str_contains($announcement, 'Bangladesh delivery from')) {
+    $announcement = 'New arrivals every week';
 }
-$deliveryHeadline = DeliveryZoneService::publicHeadline();
 $annEnabled = Helpers::setting('announcement_enabled', '1') === '1';
 ?><!doctype html>
 <html lang="<?= Helpers::e((string)Config::get('app.locale')) ?>">
@@ -94,7 +93,6 @@ $annEnabled = Helpers::setting('announcement_enabled', '1') === '1';
       <a href="/brands">Brands</a>
       <a href="/blog">Journal</a>
     </div>
-    <div class="nav-extra"><?= icon('truck',15) ?> <?= Helpers::e($deliveryHeadline) ?></div>
   </div></nav>
 </header>
 

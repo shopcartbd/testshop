@@ -75,7 +75,7 @@ echo '<div class="field"><label for="city">City / Upazila</label><input class="i
 echo '<div class="field"><label for="region">Division / District</label><input class="input" id="region" name="region" value="'.$v('region').'" maxlength="80"></div>';
 echo '<div class="field"><label for="postal_code">Postal code</label><input class="input" id="postal_code" name="postal_code" value="'.$v('postal_code').'" maxlength="20"></div>';
 echo '</div>';
-echo '<div id="bdLocationFields" class="form-grid" style="margin-top:14px"'.($country==='BD'?'':' hidden').'><div class="field span-2"><h4 style="margin-bottom:8px">Bangladesh delivery area</h4><span class="field-hint">Select division → district → upazila/thana. City and region fill automatically.</span></div>';
+echo '<div id="bdLocationFields" class="form-grid" style="margin-top:14px"'.($country==='BD'?'':' hidden').'><div class="field span-2"><h4 style="margin-bottom:8px">Bangladesh delivery area</h4></div>';
 echo '<div class="field"><label for="division_id">Division / বিভাগ</label><select class="select" id="division_id" name="division_id" data-selected="'.$v('division_id').'"><option value="">Select division / বিভাগ</option>';
 foreach ($bd['divisions'] as $d) { echo '<option value="'.Helpers::e($d['id']).'" '.($v('division_id')===$d['id']?'selected':'').'>'.Helpers::e($d['name']).($d['en']!==''?' · '.Helpers::e($d['en']):'').'</option>'; }
 echo '</select></div>';

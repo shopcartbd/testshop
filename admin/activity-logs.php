@@ -19,5 +19,4 @@ echo '</select><button class="btn btn-outline" type="submit">'.icon('search',15)
 echo '<div class="card"><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Action</th><th>Actor</th><th>Entity</th><th>Severity</th><th>IP</th><th>Date</th></tr></thead><tbody>';
 foreach($logs as $l) echo '<tr><td class="cell-strong">'.Helpers::e($l['action']).'</td><td>'.Helpers::e($l['actor_email'] ?: 'System').'</td><td>'.Helpers::e($l['entity'] ?? '—').'<div class="text-subtle" style="font-size:11px">'.Helpers::e($l['entity_id'] ?? '').'</div></td><td>'.admin_status($l,'severity').'</td><td>'.Helpers::e($l['ip_address'] ?? '—').'</td><td>'.admin_date($l,'created_at').'</td></tr>';
 echo '</tbody></table></div></div>';
-echo '<div class="alert alert-info" style="margin-top:16px">'.icon('info',16).'<span>Audit metadata is stored server-side and may include field names, never passwords, keys or full request bodies.</span></div>';
 admin_footer();

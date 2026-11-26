@@ -69,7 +69,7 @@ $edit = null; $eid = Request::str('edit','',80);
 if ($eid !== '') { foreach ($variants as $v) { if ($v['id']===$eid) $edit=$v; } }
 $fv = static fn(string $k,string $d='') => Helpers::e((string)($edit[$k] ?? $d));
 admin_header(['title'=>'Product variants','subtitle'=>Helpers::e($product['name']),'active'=>'products']);
-echo '<div class="admin-page-head"><div><h2>Variants</h2><p>Options, independent SKUs, prices and stock levels.</p></div><a class="btn btn-outline" href="/admin/products/'.Helpers::e($productId).'">← Back to product</a></div>';
+echo '<div class="admin-page-head"><a class="btn btn-outline" href="/admin/products/'.Helpers::e($productId).'">← Back to product</a></div>';
 echo '<div class="admin-split"><div class="card card-pad" style="align-self:start"><h3 style="margin-bottom:14px">'.($edit?'Edit':'Add').' variant</h3><form method="post" enctype="multipart/form-data">'.Session::csrfField().'<input type="hidden" name="variant_id" value="'.Helpers::e((string)($edit['id'] ?? '')).'"><input type="hidden" name="op" value="save"><div class="form-grid">';
 echo '<div class="field"><label for="name">Option name *</label><input class="input" id="name" name="name" required value="'.$fv('name').'" placeholder="Graphite / 256 GB"></div>';
 echo '<div class="field"><label for="sku">SKU *</label><input class="input" id="sku" name="sku" required value="'.$fv('sku').'"></div>';

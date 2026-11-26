@@ -99,9 +99,9 @@
 .category-card .overlay strong { font-size: var(--fs-md); }
 
 /* ---------------------------------------------------------------- products */
-.product-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: var(--sp-4); }
-.product-grid.grid-3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
-.product-grid.grid-5 { grid-template-columns: repeat(5, minmax(0,1fr)); }
+.product-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: var(--sp-5); }
+.product-grid.grid-3 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+.product-grid.grid-5 { grid-template-columns: repeat(4, minmax(0,1fr)); }
 .product-grid.grid-2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
 .product-card { position: relative; background: #fff; border: 1px solid var(--c-border); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; transition: box-shadow var(--transition), transform var(--transition), border-color var(--transition); }
 .product-card:hover { box-shadow: var(--shadow); transform: translateY(-3px); border-color: var(--c-border-strong); }

@@ -82,7 +82,7 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; scroll-padding-top: calc(var(--header-h) + 14px); }
 body {
   margin: 0; background: var(--c-bg); color: var(--c-text);
   font-family: var(--font); font-size: var(--fs-base); line-height: var(--lh-normal);

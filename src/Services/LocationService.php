@@ -180,9 +180,18 @@ final class LocationService
         if ($country !== 'BD') { return $empty; }
         $ids = array_filter([$divisionId,$districtId,$areaId], static fn($v)=>$v !== '');
         if ($ids === []) { return $empty; }
+        // Simplified BD checkout posts district/area only; derive the division
+        // from the district so the same structured address and zone logic work.
+        if ($divisionId === '' && $districtId !== '' && $areaId !== '') {
+            foreach (self::publicData()['divisions'] as $d) {
+                foreach ($d['districts'] ?? [] as $x) {
+                    if (($x['id'] ?? '') === $districtId) { $divisionId = (string)$d['id']; break 2; }
+                }
+            }
+        }
         $errors = [];
         if ($divisionId === '' || $districtId === '' || $areaId === '') {
-            $errors['area_id'] = 'Please complete division, district and upazila/thana.';
+            $errors['area_id'] = 'Please complete the delivery area.';
             return ['errors'=>$errors,'location'=>$empty['location']];
         }
         foreach (self::publicData()['divisions'] as $d) {

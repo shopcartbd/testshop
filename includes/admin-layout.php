@@ -20,7 +20,6 @@ function admin_header(array $opts = []): void
     $groups = [
         'Overview' => [
             ['Dashboard','/admin','dashboard','dashboard'],
-            ['Setup guide','/admin/setup-guide','setup-guide','sparkles'],
             ['Reports','/admin/reports','reports','chart'],
             ['Notifications','/admin/notifications','notifications','bell'],
             ['Activity logs','/admin/activity-logs','activity','file'],
@@ -64,18 +63,8 @@ function admin_header(array $opts = []): void
             ['Permissions','/admin/permissions','permissions','shield'],
             ['Settings','/admin/settings','settings','settings'],
             ['Security','/admin/security','security','shield'],
+            ['Setup guide','/admin/setup-guide','setup-guide','sparkles'],
         ],
-    ];
-    $groupNotes = [
-        'Overview'=>'Start here', 'Catalogue'=>'Products & specs', 'Sales'=>'Orders & customers',
-        'Content'=>'Storefront', 'Delivery'=>'BD areas & charges', 'System'=>'Access & settings',
-    ];
-    $linkNotes = [
-        '/admin/setup-guide'=>'Step-by-step store setup',
-        '/admin/locations'=>'Add division, district, upazila or thana',
-        '/admin/delivery-charges'=>'Dhaka / sub-area / outside Dhaka rates',
-        '/admin/shipping'=>'Advanced carrier and country rules',
-        '/admin/orders'=>'Images, exact options, copy address',
     ];
     $appName = (string)Config::get('app.name');
     $u = Auth::user();
@@ -97,26 +86,27 @@ function admin_header(array $opts = []): void
 <body class="admin-body" data-csrf="<?= Helpers::e(Session::csrfToken()) ?>" data-logged-in="1" data-currency-symbol="<?= Helpers::e(Helpers::currencySymbol()) ?>">
 <div class="admin-shell">
   <aside class="admin-sidebar" id="adminSidebar">
-    <a class="admin-brand" href="/admin"><span class="brand-mark"><?= icon('layers',18) ?></span><span><?= Helpers::e($appName) ?><em>Admin console</em></span></a>
+    <a class="admin-brand" href="/admin"><span class="brand-mark"><?= icon('layers',18) ?></span><span><?= Helpers::e($appName) ?></span></a>
     <nav class="admin-nav" aria-label="Admin navigation">
       <?php foreach ($groups as $g => $links): ?>
-      <div class="group"><span><?= Helpers::e($g) ?></span><small><?= Helpers::e($groupNotes[$g] ?? '') ?></small></div>
+      <div class="group"><span><?= Helpers::e($g) ?></span></div>
       <?php foreach ($links as $l):
         $label = $l[0]; $href = $l[1]; $key = $l[2]; $ic = is_array($l[3]) ? reset($l[3]) : $l[3]; ?>
-      <a href="<?= Helpers::url($href) ?>" class="<?= $page['active'] === $key ? 'active' : '' ?>" title="<?= Helpers::e($linkNotes[$href] ?? $label) ?>"><?= icon((string)$ic,17) ?><?= Helpers::e($label) ?><?php if ($key === 'delivery-charges'): ?><span class="nav-new">NEW</span><?php endif; ?><?php if ($key === 'notifications' && $unread > 0): ?><span class="pill"><?= $unread ?></span><?php endif; ?></a>
+      <a href="<?= Helpers::url($href) ?>" class="<?= $page['active'] === $key ? 'active' : '' ?>"><?= icon((string)$ic,17) ?><?= Helpers::e($label) ?><?php if ($key === 'notifications' && $unread > 0): ?><span class="pill"><?= $unread ?></span><?php endif; ?></a>
       <?php endforeach; ?>
       <?php endforeach; ?>
     </nav>
-    <div class="admin-sidebar-foot"><a href="/" style="color:#aab7b3">← View storefront</a><br><?= Helpers::e(ucfirst((string)Config::get('app.env'))) ?> · PHP <?= PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION ?></div>
+    <div class="admin-sidebar-foot"><a href="/" style="color:#aab7b3">← View storefront</a></div>
   </aside>
   <div class="admin-main">
     <header class="admin-topbar">
       <div style="display:flex;align-items:center;gap:12px">
         <button type="button" class="icon-btn" data-admin-menu aria-label="Toggle navigation" style="display:none"><?= icon('menu',20) ?></button>
-        <div><h1><?= Helpers::e($page['title']) ?></h1><div class="crumbs">Admin / <?= Helpers::e($page['title']) ?><?= !empty($page['subtitle']) ? ' · '.Helpers::e($page['subtitle']) : '' ?></div></div>
+        <div><h1><?= Helpers::e($page['title']) ?></h1></div>
       </div>
       <div class="right">
         <form class="search" action="<?= Helpers::url('/admin/orders') ?>" method="get"><?= icon('search',16) ?><input type="search" name="q" placeholder="Search orders…" aria-label="Search orders"></form>
+        <a class="icon-btn admin-guide-shortcut" href="/admin/setup-guide" aria-label="Setup guide" title="Setup guide"><?= icon('sparkles',19) ?></a>
         <a class="icon-btn" href="/admin/notifications" aria-label="Notifications"><?= icon('bell',19) ?></a>
         <div class="admin-user"><span class="avatar"><?= Helpers::e(mb_strtoupper(mb_substr((string)($u['full_name'] ?? 'A'),0,1))) ?></span><span><?= Helpers::e((string)($u['full_name'] ?? 'Admin')) ?></span></div>
         <a class="icon-btn" href="/admin/logout" aria-label="Sign out" data-confirm="Sign out of the admin console?" ><?= icon('logout',19) ?></a>

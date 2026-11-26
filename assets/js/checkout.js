@@ -26,10 +26,8 @@
     if (!zoneNote || !zone) return;
     const label = zone.label || '';
     const cost = zone.cost_label || '';
-    const note = zone.note || '';
-    zoneNote.textContent = label
-      ? (cost ? label + ' · ' + cost : label) + (note ? ' — ' + note : '')
-      : '';
+    const showCost = cost && label !== 'Select delivery area';
+    zoneNote.textContent = label ? (showCost ? label + ' · ' + cost : label) : '';
     zoneNote.hidden = !label;
     if (shippingTitle && label && label !== 'Select delivery area') {
       shippingTitle.textContent = 'Delivery — ' + label;

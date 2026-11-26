@@ -184,7 +184,6 @@ function admin_crud_page(array $cfg): void
     }
 
     admin_header(['title'=>(string)$cfg['title'],'subtitle'=>(string)($cfg['subtitle'] ?? ''),'active'=>(string)$cfg['active']]);
-    echo '<div class="admin-page-head"><div><h2>'.Helpers::e((string)$cfg['title']).'</h2><p>'.Helpers::e((string)($cfg['subtitle'] ?? '')).'</p></div></div>';
     if (!empty($cfg['notice'])) { echo '<div class="alert alert-info">'.icon('info',16).'<span>'.Helpers::e((string)$cfg['notice']).'</span></div>'; }
 
     echo '<div class="admin-split"><div class="card" style="align-self:start"><div class="card-header"><h3>'.($row !== [] ? 'Edit ' : 'Add ').Helpers::e((string)($cfg['singular'] ?? 'record')).'</h3></div><div class="card-body">';
