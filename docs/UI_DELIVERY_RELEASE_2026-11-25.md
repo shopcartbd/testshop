@@ -69,13 +69,14 @@ All original field names, CSRF, idempotency, server-side validation and script I
 - Hardened `bd-locations.js` against an early division selection and `checkout.js` against a cached `/api/locations` event firing before its listener attaches; both were verified in the previous live release and covered here by static checks.
 - Fixed the checkout/cart “−৳0.00” zero-discount display in both the initial HTML and live API totals.
 - Scoped Dhaka-city matching to Dhaka division and removed generic “Dhaka” city terms, preventing Kushtia’s Mirpur upazila from being misclassified as Dhaka city.
+- Deduplicated checkout rate requests and normalised partial Bangladesh cascades, so the auto-charge no longer waits on duplicate custom-event/direct-listener responses and resets cleanly when a division changes.
 - Verified every new page route with the HTTP smoke suite; no unexpected 500 responses.
 
 ## 7. Local verification
 
-- `bash tests/run.sh`: **195 PHP**, **5 JS**, bug-fix static `15/0`, feature static `46/0`, **653** route/handler checks, **41** Vercel checks, **74/0** HTTP smoke checks.
-- `tests/validate_release_features.py` now also checks the delivery-zone service, settings-backed storage, routing, nav grouping, copy button, address styles, checkout zone notice, product styling, BDT default, dynamic Bangladesh delivery headline, local Bengali font, zero-discount formatting and Dhaka-division-scoped classification.
+- `bash tests/run.sh`: **195 PHP**, **5 JS**, bug-fix static `15/0`, feature static `47/0`, **653** route/handler checks, **41** Vercel checks, **74/0** HTTP smoke checks.
+- `tests/validate_release_features.py` now also checks the delivery-zone service, settings-backed storage, routing, nav grouping, copy button, address styles, checkout zone notice, product styling, BDT default, dynamic Bangladesh delivery headline, local Bengali font, zero-discount formatting and Dhaka-division-scoped classification and deduplicated checkout rate requests.
 - UI/delivery runtime: **22/22** checks — admin charge save/reset, three zone classifications (city ৳70, sub-area ৳100, outside ৳150 during test), same-named-area regression, free-over threshold, copy address data, product/checkout styling, local Bengali font, new admin pages and no 5xx.
-- UI/delivery Chromium: **13/13** checks — desktop product, Bengali font load, checkout cascade + zone notice, zero-discount formatting, mobile 390×844 overflow, admin delivery charges, setup guide, copy button feedback, **0 console/page errors**. Screenshots are in `/home/user/*_local.png`.
+- UI/delivery Chromium: **14/14** checks — desktop product, Bengali font load, checkout cascade + zone notice, zero-discount formatting, incomplete-cascade reset, mobile 390×844 overflow, admin delivery charges, setup guide, copy button feedback, **0 console/page errors**. Screenshots are in `/home/user/*_local.png`.
 
 Live Supabase signed URLs, Stripe/webhook, SMTP, full cross-browser/accessibility/load QA remain outside this local verification.

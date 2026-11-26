@@ -13,6 +13,7 @@
   const zoneNote = $('checkoutDeliveryZone');
   if (!country || !shippingBox || !division || !district || !area) return;
   let requestSeq = 0;
+  let lastKey = '';
 
   const renderTotals = (totals) => {
     if (!totals) return;
@@ -75,21 +76,36 @@
       shippingBox.appendChild(element);
     });
   };
-  function refreshRates() {
-    const seq = ++requestSeq;
+
+  /** One canonical parameter set. Partial BD cascades are normalised to an
+      empty selection so the server returns the “Select delivery area” state
+      instead of a 422. This also prevents duplicate custom-event/direct-listener
+      requests and stale full-area responses from being ignored. */
+  const buildParams = () => {
     const isBd = country.value === 'BD';
-    const partial = (division.value || district.value || area.value)
-      && !(division.value && district.value && area.value);
-    if (isBd && partial) return; // cascade is still being completed
-    const params = new URLSearchParams({
+    const complete = Boolean(division.value && district.value && area.value);
+    const partial = isBd && Boolean(division.value || district.value || area.value) && !complete;
+    const values = {
       country: country.value,
-      division_id: division.value || '',
-      district_id: district.value || '',
-      area_id: area.value || '',
-    });
+      division_id: (isBd && partial) ? '' : (division.value || ''),
+      district_id: (isBd && partial) ? '' : (district.value || ''),
+      area_id: (isBd && partial) ? '' : (area.value || ''),
+    };
+    const params = new URLSearchParams(values);
     const chosen = document.querySelector('input[name="shipping_method"]:checked');
-    if (chosen) params.set('shipping_method', chosen.value);
-    fetch('/api/checkout/shipping-rates?' + params.toString(), {
+    if (chosen && chosen.value && chosen.value !== 'select_area') {
+      params.set('shipping_method', chosen.value);
+    }
+    return params;
+  };
+
+  function refreshRates() {
+    const params = buildParams();
+    const key = params.toString();
+    if (key === lastKey) return; // one request per distinct checkout state
+    lastKey = key;
+    const seq = ++requestSeq; // increment only for an actual in-flight request
+    fetch('/api/checkout/shipping-rates?' + key, {
       credentials: 'same-origin',
       headers: { Accept: 'application/json' },
     })
@@ -104,7 +120,9 @@
         renderRates(json.data);
         renderTotals(json.data.totals);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (lastKey === key) lastKey = ''; // allow a retry after a network error
+      });
   }
   document.addEventListener('bd-location-change', refreshRates);
   // Also listen directly: a cached /api/locations response can dispatch the
