@@ -20,7 +20,8 @@ $fields=[
  'contact_email'=>['Contact email','email','hello@example.com'],
  'contact_phone'=>['Contact phone','text',''],
  'store_address'=>['Store address','textarea',''],
- 'default_country'=>['Default country (2 letters)','text','US'],
+ 'default_country'=>['Legacy default country (2 letters)','text','BD'],
+ 'checkout_default_country'=>['Checkout default country (2 letters)','text','BD'],
  'default_shipping_cents'=>['Fallback shipping cost (cents)','number','799'],
  'free_shipping_threshold_cents'=>['Free shipping threshold (cents)','number','7500'],
  'cod_enabled'=>['Enable Cash on Delivery','bool','1'],
@@ -37,7 +38,7 @@ if (Request::isPost()) {
             if($type==='email' && $v!=='' && !filter_var($v,FILTER_VALIDATE_EMAIL)) throw new AppException('Enter a valid contact email.',422);
             if($type==='url' && $v!=='' && $v!=='#' && !preg_match('#^https://[a-z0-9.\-]+#i',$v)) throw new AppException('Social links must be HTTPS URLs or #.',422);
             if($type==='number' && (!is_numeric($v) || (int)$v<0)) throw new AppException($label.' must be a non-negative number.',422);
-            if($key==='default_country') $v=strtoupper(substr(preg_replace('/[^A-Za-z]/','',$v) ?: 'US',0,2));
+            if($key==='default_country' || $key==='checkout_default_country') $v=strtoupper(substr(preg_replace('/[^A-Za-z]/','',$v) ?: 'BD',0,2));
             Helpers::setSetting($key,$v,'general');
         }
         Logger::audit('admin.settings.updated','settings'); Session::flash('success','Store settings saved.');

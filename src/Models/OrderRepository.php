@@ -8,6 +8,7 @@ use AllStore\Core\Auth;
 use AllStore\Core\AppException;
 use AllStore\Core\Logger;
 use AllStore\Services\NotificationService;
+use AllStore\Services\UploadService;
 
 final class OrderRepository
 {
@@ -33,7 +34,65 @@ final class OrderRepository
     {
         return Database::first('SELECT * FROM orders WHERE order_number=:n AND user_id=:u', ['n'=>$number,'u'=>$userId]);
     }
-    public static function items(string $orderId): array { return Database::all('SELECT * FROM order_items WHERE order_id=:o ORDER BY id', ['o'=>$orderId]); }
+    public static function items(string $orderId): array
+    {
+        $rows = Database::all("SELECT oi.*, p.slug AS product_slug,
+            COALESCE(NULLIF(oi.image_url,''),
+                (SELECT pi.url FROM product_images pi WHERE pi.product_id=oi.product_id ORDER BY pi.is_primary DESC, pi.sort_order ASC LIMIT 1),
+                '/assets/img/products/headphones.jpg') AS resolved_image_url
+            FROM order_items oi
+            LEFT JOIN products p ON p.id=oi.product_id AND p.deleted_at IS NULL
+            WHERE oi.order_id=:o ORDER BY oi.id", ['o'=>$orderId]);
+        // A JSON-encoded URL can survive older vendor/Database adapters; normalise
+        // it here so <img src> never becomes a malformed, quoted relative URL.
+        foreach ($rows as &$row) {
+            $value = trim((string)($row['resolved_image_url'] ?? ''));
+            if (str_starts_with($value, '"') && str_ends_with($value, '"')) {
+                $decoded = Helpers::decode($value, '');
+                if (is_string($decoded)) { $value = trim($decoded); }
+            }
+            $row['resolved_image_url'] = Helpers::safeMediaUrl($value);
+        }
+        unset($row);
+        return $rows;
+    }
+
+    public static function itemDetails(array $item): array
+    {
+        $raw = $item['options'] ?? null;
+        if (is_string($raw)) { $raw = Helpers::decode($raw, []); }
+        $details = Helpers::orderItemDetails(is_array($raw) ? $raw : []);
+        $image = Helpers::safeMediaUrl((string)($item['resolved_image_url'] ?? $item['image_url'] ?? ''));
+        if ($image !== '' && str_starts_with($image, 'supabase-private:')) { $image = UploadService::url($image); }
+        $details['image_url'] = $image !== '' ? $image : '/assets/img/products/headphones.jpg';
+        if (!empty($details['download_url']) && str_starts_with((string)$details['download_url'], 'supabase-private:')) {
+            $details['download_url'] = UploadService::url((string)$details['download_url']);
+        }
+        $details['product_slug'] = (string)($item['product_slug'] ?? '');
+        return $details;
+    }
+
+    public static function itemsCsv(array $items): string
+    {
+        $h = fopen('php://temp','w+');
+        fputcsv($h, ['order_item_id','product','sku','quantity','unit_price','line_total','options','bundle_items','product_kind','image_url','digital_file_url']);
+        foreach ($items as $item) {
+            $d = self::itemDetails($item);
+            $options = [];
+            foreach ($d['options'] as $o) { $options[] = $o['label'] . ': ' . $o['value']; }
+            $bundle = [];
+            foreach ($d['bundle_items'] as $b) { $bundle[] = trim($b['sku'] . ' ' . $b['name'] . ' x' . $b['qty']); }
+            fputcsv($h, [
+                $item['id'] ?? '', $item['name'] ?? '', $item['sku'] ?? '', (int)($item['quantity'] ?? 0),
+                number_format(((int)($item['unit_price_cents'] ?? 0))/100,2,'.',''),
+                number_format(((int)($item['total_cents'] ?? 0))/100,2,'.',''),
+                implode(' | ', $options), implode(' | ', $bundle), (string)($d['product_kind'] ?? ''),
+                $d['image_url'], $d['download_url'],
+            ]);
+        }
+        rewind($h); $csv = (string)stream_get_contents($h); fclose($h);
+        return $csv;
+    }
     public static function history(string $orderId): array { return Database::all('SELECT * FROM order_status_history WHERE order_id=:o ORDER BY created_at ASC', ['o'=>$orderId]); }
     public static function shipment(string $orderId): ?array { return Database::first('SELECT s.*, c.name AS courier_name, c.tracking_url_template FROM shipments s LEFT JOIN couriers c ON c.id=s.courier_id WHERE s.order_id=:o', ['o'=>$orderId]); }
     public static function payment(string $orderId): ?array { return Database::first('SELECT * FROM payments WHERE order_id=:o ORDER BY created_at DESC LIMIT 1', ['o'=>$orderId]); }
@@ -55,7 +114,11 @@ final class OrderRepository
         $where = implode(' AND ', $w);
         $page = max(1, (int)($f['page'] ?? 1)); $per = 20; $off = ($page-1)*$per;
         $total = (int)Database::value("SELECT COUNT(*) FROM orders o WHERE $where", $p);
-        $items = Database::all("SELECT o.*, (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id=o.id) AS item_count
+        $items = Database::all("SELECT o.*, (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id=o.id) AS item_count,
+            (SELECT oi2.name FROM order_items oi2 WHERE oi2.order_id=o.id ORDER BY oi2.id ASC LIMIT 1) AS first_item_name,
+            (SELECT COALESCE(NULLIF(oi2.image_url,''),
+                (SELECT pi.url FROM product_images pi WHERE pi.product_id=oi2.product_id ORDER BY pi.is_primary DESC, pi.sort_order ASC LIMIT 1))
+                FROM order_items oi2 WHERE oi2.order_id=o.id ORDER BY oi2.id ASC LIMIT 1) AS first_item_image
             FROM orders o WHERE $where ORDER BY o.placed_at DESC LIMIT $per OFFSET $off", $p);
         return ['items'=>$items,'total'=>$total,'page'=>$page,'pages'=>max(1,(int)ceil($total/$per))];
     }
@@ -104,12 +167,13 @@ final class OrderRepository
             $q = (int)$it['quantity'];
             Database::exec('UPDATE products SET stock = stock + :q, sold_count = CASE WHEN sold_count > :q2 THEN sold_count - :q3 ELSE 0 END WHERE id=:i',
                 ['q'=>$q,'q2'=>$q,'q3'=>$q,'i'=>$it['product_id']]);
-            if ($it['variant_id'] !== '') {
-                Database::exec('UPDATE product_variants SET stock = stock + :q WHERE id=:i', ['q'=>$q,'i'=>$it['variant_id']]);
+            $stockVariantId = Helpers::orderStockVariantId($it);
+            if ($stockVariantId !== '') {
+                Database::exec('UPDATE product_variants SET stock = stock + :q WHERE id=:i', ['q'=>$q,'i'=>$stockVariantId]);
             }
             Database::exec('UPDATE inventory SET quantity = quantity + :q, available = available + :q WHERE product_id=:p AND variant_id=:v',
-                ['q'=>$q,'p'=>$it['product_id'],'v'=>$it['variant_id']]);
-            Database::insert('stock_movements', ['id'=>Helpers::uuid(),'product_id'=>$it['product_id'],'variant_id'=>$it['variant_id'],
+                ['q'=>$q,'p'=>$it['product_id'],'v'=>$stockVariantId]);
+            Database::insert('stock_movements', ['id'=>Helpers::uuid(),'product_id'=>$it['product_id'],'variant_id'=>$stockVariantId,
                 'movement_type'=>'cancel','quantity_change'=>$q,'quantity_after'=>(int)Database::value('SELECT stock FROM products WHERE id=:i',['i'=>$it['product_id']]),
                 'reference_type'=>'order','reference_id'=>$orderId,'note'=>'Order cancelled','created_by'=>Auth::id(),'created_at'=>Helpers::now()]);
         }
@@ -153,9 +217,12 @@ final class OrderRepository
     {
         $rows = self::allForAdmin(array_merge($f, ['page'=>1]))['items'];
         $h = fopen('php://temp','w+');
-        fputcsv($h, ['order_number','date','customer','email','status','payment','subtotal','discount','shipping','tax','total']);
+        fputcsv($h, ['order_number','date','customer','email','status','payment','division','district','area','city','region','postal_code','country','subtotal','discount','shipping','tax','total']);
         foreach ($rows as $r) {
+            $a = (array)Helpers::decode((string)($r['shipping_address'] ?? ''), []);
             fputcsv($h, [$r['order_number'],$r['placed_at'],$r['customer_name'],$r['customer_email'],$r['status'],$r['payment_method'],
+                $a['division'] ?? '',$a['district'] ?? '',$a['area'] ?? '',$a['city'] ?? '',$a['region'] ?? '',
+                $a['postal_code'] ?? '',$a['country'] ?? '',
                 number_format($r['subtotal_cents']/100,2,'.',''),number_format($r['discount_cents']/100,2,'.',''),
                 number_format($r['shipping_cents']/100,2,'.',''),number_format($r['tax_cents']/100,2,'.',''),
                 number_format($r['total_cents']/100,2,'.','')]);

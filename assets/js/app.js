@@ -111,6 +111,20 @@
     const productId = btn.dataset.productId || btn.dataset.addToCart;
     if (!productId) { AS.toast('error', 'Choose a product.'); return; }
     const variantId = btn.dataset.variantId || document.querySelector('[data-pdp-variant]')?.value || '';
+    // Product-specific custom fields are validated before any optimistic UI change.
+    const customOptions = {};
+    for (const field of document.querySelectorAll('[data-custom-option]')) {
+      const match = /\[([^\]]+)\]/.exec(field.name || '');
+      const key = match ? match[1] : (field.id || '').replace(/^custom_/, '');
+      const label = field.dataset.label || key || 'This field';
+      const value = String(field.value || '').trim();
+      if (field.dataset.required === '1' && !value) {
+        AS.toast('error', label + ' is required.');
+        field.focus();
+        return;
+      }
+      if (key && value) customOptions[key] = { label: label, value: value };
+    }
     const scope = btn.closest('.pdp-actions');
     const buttons = Array.from((scope || btn.parentElement || document).querySelectorAll('[data-add-to-cart]'));
     if (!buttons.includes(btn)) buttons.unshift(btn);
@@ -137,6 +151,7 @@
         product_id: productId,
         variant_id: variantId,
         quantity: qty,
+        custom_options: customOptions,
       }, { timeout: 30000 });
       succeeded = true;
       if (progressToast) progressToast.remove();

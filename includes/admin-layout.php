@@ -53,6 +53,7 @@ function admin_header(array $opts = []): void
         ],
         'System' => [
             ['Shipping','/admin/shipping','shipping','truck'],
+            ['Bangladesh areas','/admin/locations','locations','package'],
             ['Couriers','/admin/couriers','couriers','package'],
             ['Admin users','/admin/admin-users','admin-users','users'],
             ['Roles','/admin/roles','roles','lock'],

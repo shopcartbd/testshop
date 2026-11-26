@@ -22,7 +22,7 @@ final class Helpers
         $s = strtolower(trim($s));
         $s = preg_replace('/[^a-z0-9\s\-_]+/', '', $s) ?? '';
         $s = preg_replace('/[\s_]+/', '-', $s) ?? '';
-        return trim(preg_replace('/-+/', '-', $s) ?? '', '-') ?: 'item-' . substr(self::token(4), 0, 6);
+        return trim(preg_replace('/-+/', '-', $s) ?? '', '-') ?: 'item-' . substr(hash('sha256', $s), 0, 8);
     }
     public static function currencySymbol(): string
     {
@@ -85,6 +85,106 @@ final class Helpers
             ['k'=>$key,'v'=>$value,'g'=>$group,'t'=>self::now(),'v2'=>$value,'g2'=>$group,'t2'=>self::now()]);
         if (self::$settingsCache !== null) { self::$settingsCache[$key] = $value; }
     }
+
+    /** Allow only internal media paths or syntactically safe HTTPS URLs. */
+    public static function safeMediaUrl(string $url): string
+    {
+        $url = trim($url);
+        if ($url === '') { return ''; }
+        if (str_starts_with($url, '/') && !str_starts_with($url, '//')) {
+            $path = (string)parse_url($url, PHP_URL_PATH);
+            return preg_match('#^/(assets|storage/uploads)/[A-Za-z0-9/_\.\-]+$#', $path) ? $url : '';
+        }
+        if (preg_match('#^supabase-private:[A-Za-z0-9/_\.\-]{1,300}$#', $url)) { return $url; }
+        if (!preg_match('#^https://[A-Za-z0-9\.\-]+/[^\s<>]*$#i', $url)) { return ''; }
+        $host = strtolower((string)parse_url($url, PHP_URL_HOST));
+        if ($host === '' || preg_match('/(^|\.)(localhost|local|internal|test)$/i', $host)) { return ''; }
+        return $url;
+    }
+
+    /** Snapshot details stored with an order/cart item: options, bundle and delivery file. */
+    public static function orderItemDetails(array $options): array
+    {
+        $display = []; $download = ''; $bundle = []; $kind = '';
+        foreach ($options as $key => $value) {
+            $key = (string)$key;
+            if (str_starts_with($key, '__')) {
+                if ($key === '__download_url') { $download = self::safeMediaUrl(self::optionText($value)); }
+                elseif ($key === '__bundle_items') { $bundle = self::bundleItems($value); }
+                elseif ($key === '__product_kind') { $kind = self::optionText($value); }
+                continue;
+            }
+            if (is_array($value) && (array_key_exists('label', $value) || array_key_exists('value', $value))) {
+                $label = mb_substr(trim((string)($value['label'] ?? self::optionLabel($key))), 0, 120);
+                $text = self::optionText($value['value'] ?? '');
+            } else {
+                $label = self::optionLabel($key);
+                $text = self::optionText($value);
+            }
+            if ($text !== '') { $display[] = ['label'=>$label !== '' ? $label : 'Option','value'=>$text]; }
+        }
+        return [
+            'options'=>$display, 'download_url'=>$download, 'bundle_items'=>$bundle,
+            'product_kind'=>$kind !== '' ? $kind : null,
+        ];
+    }
+
+    public static function orderStockVariantId(array $item): string
+    {
+        $raw = $item['options'] ?? null;
+        if (is_string($raw)) { $raw = (array)self::decode($raw, []); }
+        $options = is_array($raw) ? $raw : [];
+        $base = trim((string)($options['__base_variant_id'] ?? ''));
+        if (preg_match('/^[A-Za-z0-9_\-]{1,64}$/', $base)) { return $base; }
+        $variant = (string)($item['variant_id'] ?? '');
+        return str_starts_with($variant, 'custom-') ? '' : $variant;
+    }
+
+    public static function canShowDigitalDownloads(array $order): bool
+    {
+        $status = (string)($order['status'] ?? '');
+        $payment = (string)($order['payment_status'] ?? '');
+        if (in_array($status, ['cancelled','refunded','returned'], true)) { return false; }
+        return in_array($payment, ['paid','authorized','cod_pending','partially_refunded'], true)
+            || in_array($status, ['confirmed','processing','packed','shipped','delivered'], true);
+    }
+
+    private static function optionText(mixed $value): string
+    {
+        if (is_bool($value)) { return $value ? 'Yes' : 'No'; }
+        if (is_array($value)) {
+            $parts = [];
+            foreach ($value as $v) { $t = self::optionText($v); if ($t !== '') { $parts[] = $t; } }
+            return mb_substr(implode(', ', $parts), 0, 300);
+        }
+        if (!is_scalar($value)) { return ''; }
+        return mb_substr(trim((string)$value), 0, 300);
+    }
+
+    private static function optionLabel(string $key): string
+    {
+        $key = preg_replace('/[^A-Za-z0-9_\- ]+/', '', $key) ?? '';
+        return mb_substr(ucwords(trim(str_replace(['_','-'], ' ', $key))), 0, 120) ?: 'Option';
+    }
+
+    private static function bundleItems(mixed $raw): array
+    {
+        if (is_string($raw)) { $raw = self::decode($raw, []); }
+        if (!is_array($raw)) { return []; }
+        $out = [];
+        foreach (array_slice($raw, 0, 50) as $row) {
+            if (!is_array($row)) { $row = ['name'=>(string)$row]; }
+            $name = mb_substr(trim((string)($row['name'] ?? '')), 0, 160);
+            if ($name === '') { continue; }
+            $out[] = [
+                'name'=>$name,
+                'sku'=>mb_substr(trim((string)($row['sku'] ?? '')), 0, 64),
+                'qty'=>max(1, min(999, (int)($row['qty'] ?? 1))),
+            ];
+        }
+        return $out;
+    }
+
     public static function timeAgo(string $iso): string
     {
         $t = strtotime($iso) ?: time();

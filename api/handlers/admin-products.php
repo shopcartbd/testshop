@@ -30,6 +30,14 @@ if(Request::method()==='POST'){
   $in['brand_id']=Request::id('brand_id') ?: null;
   $in['status']=in_array(Request::str('status','draft',20),['draft','active','inactive','archived'],true)?Request::str('status','draft',20):'draft';
   $in['product_type']=in_array(Request::str('product_type','simple',20),['simple','variable','bundle','digital'],true)?Request::str('product_type','simple',20):'simple';
+  $in['product_kind']=Request::str('product_kind','',40);
+  if($in['product_kind']==='' && $id!=='') { $in['product_kind']=CatalogRepository::productMeta($id)['kind'] ?? 'physical'; }
+  $digitalFile=Request::str('digital_file_url','',1000);
+  $in['digital_file_url']=preg_match('#^supabase-private:[A-Za-z0-9/_\\.\\-]{1,300}$#',$digitalFile)?$digitalFile:api_public_url($digitalFile);
+  $in['custom_options']=Request::str('custom_options','',20000);
+  $in['bundle_items']=Request::str('bundle_items','',20000);
+  $in['service_details']=Request::str('service_details','',20000);
+  $spec=Request::input('spec',[]); $in['spec']=is_array($spec)?$spec:[];
   $in['video_url']=api_public_url(Request::str('video_url','',500));
   $saved=CatalogRepository::saveProduct($in,$id!==''?$id:null);
   Logger::audit('api.admin.product.saved','products',$saved);

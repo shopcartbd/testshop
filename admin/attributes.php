@@ -19,6 +19,8 @@ if (Request::isPost()) {
     try {
         if (Request::str('op','save',20) === 'delete') {
             $did = Request::id('id'); if ($did==='') throw new AppException('Missing attribute id.',422);
+            $reserved = Database::first('SELECT slug FROM attributes WHERE id=:i',['i'=>$did]);
+            if ($reserved && str_starts_with((string)$reserved['slug'],'system-')) throw new AppException('Internal product data cannot be deleted.',422);
             Database::delete('attributes','id=:i',['i'=>$did]); Logger::audit('admin.attribute.deleted','attributes',$did); Session::flash('success','Attribute deleted.'); Response::redirect('/admin/attributes');
         }
         $in = Request::all();

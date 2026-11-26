@@ -134,7 +134,7 @@ final class CatalogRepository
             FROM product_attribute_values pav
             JOIN attributes at ON at.id=pav.attribute_id
             LEFT JOIN attribute_values av ON av.id=pav.value_id
-            WHERE pav.product_id=:p ORDER BY at.sort_order, at.name", ['p'=>$productId]);
+            WHERE pav.product_id=:p AND at.slug NOT LIKE 'system-%' ORDER BY at.sort_order, at.name", ['p'=>$productId]);
     }
     public static function reviews(string $productId, int $limit = 20): array
     {
@@ -302,7 +302,8 @@ final class CatalogRepository
     }
     public static function allAttributes(): array
     {
-        return Database::all('SELECT a.*, (SELECT COUNT(*) FROM attribute_values v WHERE v.attribute_id=a.id) AS value_count FROM attributes a ORDER BY a.sort_order, a.name');
+        return Database::all("SELECT a.*, (SELECT COUNT(*) FROM attribute_values v WHERE v.attribute_id=a.id) AS value_count
+            FROM attributes a WHERE a.slug NOT LIKE 'system-%' ORDER BY a.sort_order, a.name");
     }
     public static function saveAttribute(array $in, ?string $id = null): string
     {
@@ -311,7 +312,15 @@ final class CatalogRepository
         if ($name === '' || !in_array($type, ['text','number','boolean','dropdown','multiselect','color','measurement'], true)) {
             throw new AppException('Attribute name and a valid type are required.', 422);
         }
-        $data = ['name'=>$name,'slug'=>Helpers::slugify((string)($in['slug'] ?? $name)),'type'=>$type,
+        $slug = Helpers::slugify((string)($in['slug'] ?? $name));
+        if (str_starts_with($slug, 'system-')) { throw new AppException('This slug is reserved for internal product data.', 422); }
+        if ($id !== null) {
+            $existing = Database::first('SELECT slug FROM attributes WHERE id=:i', ['i'=>$id]);
+            if ($existing && str_starts_with((string)$existing['slug'], 'system-')) {
+                throw new AppException('Internal product data cannot be edited here.', 422);
+            }
+        }
+        $data = ['name'=>$name,'slug'=>$slug,'type'=>$type,
             'unit'=>(string)($in['unit'] ?? ''),'is_filterable'=>(int)($in['is_filterable'] ?? 1),
             'sort_order'=>(int)($in['sort_order'] ?? 0)];
         if ($id) { Database::update('attributes', $data, 'id=:id', ['id'=>$id]); }
@@ -328,6 +337,177 @@ final class CatalogRepository
         }
         return $id;
     }
+    private const SYSTEM_META = [
+        'system-product-kind' => 'Product kind',
+        'system-custom-options' => 'Custom order options',
+        'system-digital-file' => 'Digital delivery file',
+        'system-bundle-items' => 'Bundle contents',
+        'system-service-details' => 'Service details',
+    ];
+    private const SYSTEM_META_FIELDS = [
+        'system-product-kind' => 'product_kind',
+        'system-custom-options' => 'custom_options',
+        'system-digital-file' => 'digital_file_url',
+        'system-bundle-items' => 'bundle_items',
+        'system-service-details' => 'service_details',
+    ];
+
+    private static function ensureSystemAttribute(string $slug, string $name): string
+    {
+        $row = Database::first('SELECT id FROM attributes WHERE slug=:s', ['s'=>$slug]);
+        if ($row) { return (string)$row['id']; }
+        $id = Helpers::uuid();
+        Database::exec("INSERT INTO attributes(id,name,slug,type,unit,is_filterable,sort_order,created_at)
+            VALUES(:i,:n,:s,'text','',0,900,:t) ON CONFLICT(slug) DO NOTHING",
+            ['i'=>$id,'n'=>$name,'s'=>$slug,'t'=>Helpers::now()]);
+        $row = Database::first('SELECT id FROM attributes WHERE slug=:s', ['s'=>$slug]);
+        return (string)($row['id'] ?? $id);
+    }
+
+    public static function saveSystemMeta(string $productId, string $slug, string $value): void
+    {
+        $name = self::SYSTEM_META[$slug] ?? 'Product meta';
+        $attributeId = self::ensureSystemAttribute($slug, $name);
+        $value = mb_substr($value, 0, 20000);
+        Database::exec("INSERT INTO product_attribute_values(product_id,attribute_id,value_id,value_text)
+            VALUES(:p,:a,'',:v) ON CONFLICT(product_id,attribute_id,value_id) DO UPDATE SET value_text=:v2",
+            ['p'=>$productId,'a'=>$attributeId,'v'=>$value,'v2'=>$value]);
+    }
+
+    public static function productMetaRaw(string $productId): array
+    {
+        $rows = Database::all("SELECT a.slug, pav.value_text FROM product_attribute_values pav
+            JOIN attributes a ON a.id=pav.attribute_id
+            WHERE pav.product_id=:p AND a.slug LIKE 'system-%'", ['p'=>$productId]);
+        $out = [];
+        foreach ($rows as $r) { $out[(string)$r['slug']] = (string)($r['value_text'] ?? ''); }
+        return $out;
+    }
+
+    public static function productMeta(string $productId): array
+    {
+        $raw = self::productMetaRaw($productId);
+        return [
+            'kind'=>mb_substr(trim((string)($raw['system-product-kind'] ?? 'physical')), 0, 40) ?: 'physical',
+            'custom_options'=>self::parseCustomOptions((string)($raw['system-custom-options'] ?? '')),
+            'custom_options_text'=>(string)($raw['system-custom-options'] ?? ''),
+            'digital_file_url'=>Helpers::safeMediaUrl((string)($raw['system-digital-file'] ?? '')),
+            'bundle_items'=>self::parseBundleItems((string)($raw['system-bundle-items'] ?? '')),
+            'bundle_items_text'=>(string)($raw['system-bundle-items'] ?? ''),
+            'service_details'=>(string)($raw['system-service-details'] ?? ''),
+        ];
+    }
+
+    public static function customOptions(string $productId): array
+    {
+        return self::productMeta($productId)['custom_options'];
+    }
+
+    public static function parseCustomOptions(string $raw): array
+    {
+        $raw = trim($raw);
+        if ($raw === '') { return []; }
+        $rows = [];
+        if (str_starts_with($raw, '[')) {
+            $decoded = Helpers::decode($raw, []);
+            if (is_array($decoded)) { $rows = $decoded; }
+        } else {
+            foreach (preg_split('/\r\n|\r|\n/', $raw) ?: [] as $line) {
+                $parts = array_map('trim', explode('|', $line, 4));
+                $rows[] = ['label'=>$parts[0] ?? '', 'type'=>$parts[1] ?? 'text', 'required'=>$parts[2] ?? '', 'choices'=>$parts[3] ?? ''];
+            }
+        }
+        $out = [];
+        foreach (array_slice($rows, 0, 20) as $row) {
+            if (!is_array($row)) { continue; }
+            $label = mb_substr(trim((string)($row['label'] ?? '')), 0, 120);
+            if ($label === '') { continue; }
+            $type = strtolower((string)($row['type'] ?? 'text'));
+            if (!in_array($type, ['text','textarea','select'], true)) { $type = 'text'; }
+            $choicesRaw = $row['choices'] ?? [];
+            if (is_string($choicesRaw)) { $choicesRaw = explode(',', $choicesRaw); }
+            $choices = [];
+            foreach ((array)$choicesRaw as $choice) {
+                $choice = mb_substr(trim((string)$choice), 0, 120);
+                if ($choice !== '') { $choices[] = $choice; }
+                if (count($choices) >= 30) { break; }
+            }
+            $out[] = [
+                'slug'=>Helpers::slugify($label), 'label'=>$label, 'type'=>$type,
+                'required'=>in_array(strtolower((string)($row['required'] ?? '')), ['1','true','yes','required','on'], true),
+                'choices'=>$choices,
+            ];
+        }
+        return $out;
+    }
+
+    public static function parseBundleItems(string $raw): array
+    {
+        $raw = trim($raw);
+        if ($raw === '') { return []; }
+        $rows = [];
+        if (str_starts_with($raw, '[')) {
+            $decoded = Helpers::decode($raw, []);
+            if (is_array($decoded)) { $rows = $decoded; }
+        } else {
+            foreach (preg_split('/\r\n|\r|\n/', $raw) ?: [] as $line) {
+                $parts = array_map('trim', explode('|', $line, 3));
+                $rows[] = ['sku'=>$parts[0] ?? '', 'name'=>$parts[1] ?? ($parts[0] ?? ''), 'qty'=>$parts[2] ?? 1];
+            }
+        }
+        $out = [];
+        foreach (array_slice($rows, 0, 50) as $row) {
+            if (!is_array($row)) { continue; }
+            $name = mb_substr(trim((string)($row['name'] ?? '')), 0, 160);
+            if ($name === '') { continue; }
+            $out[] = ['sku'=>mb_substr(trim((string)($row['sku'] ?? '')),0,64),'name'=>$name,
+                'qty'=>max(1,min(999,(int)($row['qty'] ?? 1)))];
+        }
+        return $out;
+    }
+
+    public static function validateCustomOptions(array $definitions, mixed $submitted): array
+    {
+        $submitted = is_array($submitted) ? $submitted : [];
+        $out = [];
+        foreach ($definitions as $def) {
+            $slug = (string)($def['slug'] ?? '');
+            if ($slug === '') { continue; }
+            $raw = $submitted[$slug] ?? null;
+            if (is_array($raw)) { $raw = $raw['value'] ?? ''; }
+            $value = mb_substr(trim((string)(is_scalar($raw) ? $raw : '')), 0, 300);
+            if (!empty($def['required']) && $value === '') {
+                throw new AppException(($def['label'] ?? 'Custom option') . ' is required.', 422);
+            }
+            $choices = (array)($def['choices'] ?? []);
+            if ($value !== '' && $choices !== [] && !in_array($value, $choices, true)) {
+                throw new AppException('Choose a valid value for ' . ($def['label'] ?? 'custom option') . '.', 422);
+            }
+            if ($value !== '') { $out[$slug] = ['label'=>(string)($def['label'] ?? $slug),'value'=>$value]; }
+        }
+        return $out;
+    }
+
+    public static function saveProductSpecs(string $productId, mixed $specs): void
+    {
+        if (!is_array($specs)) { return; }
+        foreach (array_slice($specs, 0, 40, true) as $attributeId => $value) {
+            $attributeId = (string)$attributeId;
+            if (!preg_match('/^[A-Za-z0-9_\-]{1,64}$/', $attributeId)) { continue; }
+            $attribute = Database::first('SELECT slug FROM attributes WHERE id=:a', ['a'=>$attributeId]);
+            if (!$attribute || str_starts_with((string)$attribute['slug'], 'system-')) { continue; }
+            $text = mb_substr(trim((string)(is_scalar($value) ? $value : '')), 0, 300);
+            if ($text === '') {
+                Database::delete('product_attribute_values', 'product_id=:p AND attribute_id=:a AND value_id=:v',
+                    ['p'=>$productId,'a'=>$attributeId,'v'=>'']);
+                continue;
+            }
+            Database::exec("INSERT INTO product_attribute_values(product_id,attribute_id,value_id,value_text)
+                VALUES(:p,:a,'',:t) ON CONFLICT(product_id,attribute_id,value_id) DO UPDATE SET value_text=:t2",
+                ['p'=>$productId,'a'=>$attributeId,'t'=>$text,'t2'=>$text]);
+        }
+    }
+
     public static function saveProduct(array $in, ?string $id = null): string
     {
         $name = trim((string)($in['name'] ?? ''));
@@ -337,6 +517,20 @@ final class CatalogRepository
         if (!in_array($status, ['draft','active','inactive','archived'], true)) { $status = 'draft'; }
         $type = (string)($in['product_type'] ?? 'simple');
         if (!in_array($type, ['simple','variable','bundle','digital'], true)) { $type = 'simple'; }
+        $kind = strtolower(trim((string)($in['product_kind'] ?? '')));
+        if (!in_array($kind, ['physical','digital','service','subscription','custom','bundle','variable'], true)) {
+            $kind = $type === 'digital' ? 'digital' : ($type === 'bundle' ? 'bundle' : ($type === 'variable' ? 'variable' : 'physical'));
+        }
+        // The deployed CHECK constraint supports four catalogue structures. The
+        // merchant-facing "kind" covers services, subscriptions and custom work
+        // without a production DDL change; digital kinds become digital products.
+        if (in_array($kind, ['digital','service','subscription'], true)) { $type = 'digital'; }
+        elseif ($kind === 'bundle') { $type = 'bundle'; }
+        elseif ($kind === 'variable') { $type = 'variable'; }
+        else { $type = 'simple'; }
+        $stock = max(0, (int)($in['stock'] ?? 0));
+        $weight = max(0, (int)($in['weight_grams'] ?? 0));
+        if ($type === 'digital') { $stock = $stock > 0 ? $stock : 999999; $weight = 0; }
         $slug = Helpers::slugify((string)($in['slug'] ?? $name));
         $sku = trim((string)($in['sku'] ?? '')) ?: 'SKU-' . strtoupper(substr(Helpers::token(5), 0, 8));
         $data = [
@@ -350,9 +544,9 @@ final class CatalogRepository
             'price_cents'=>$price,
             'compare_cents'=>max(0, (int)round(((float)($in['compare_price'] ?? 0)) * 100)),
             'tax_rate'=>(float)($in['tax_rate'] ?? 0),
-            'stock'=>max(0, (int)($in['stock'] ?? 0)),
+            'stock'=>$stock,
             'low_stock_threshold'=>max(0, (int)($in['low_stock_threshold'] ?? 5)),
-            'weight_grams'=>max(0, (int)($in['weight_grams'] ?? 0)),
+            'weight_grams'=>$weight,
             'dimensions'=>(string)($in['dimensions'] ?? ''), 'warranty'=>(string)($in['warranty'] ?? ''),
             'return_eligible'=>(int)($in['return_eligible'] ?? 1), 'return_days'=>max(0,(int)($in['return_days'] ?? 14)),
             'status'=>$status, 'is_featured'=>(int)($in['is_featured'] ?? 0),
@@ -391,6 +585,16 @@ final class CatalogRepository
                 $i++;
             }
         }
+        // Generic product kinds, custom order fields, digital delivery, bundle
+        // contents and per-product specifications live in the existing dynamic
+        // attribute tables. Missing fields are left untouched for bulk updates.
+        $metaInput = $in;
+        $metaInput['product_kind'] = $kind;
+        foreach (self::SYSTEM_META_FIELDS as $slug => $field) {
+            if (!array_key_exists($field, $metaInput)) { continue; }
+            self::saveSystemMeta($id, $slug, (string)$metaInput[$field]);
+        }
+        if (array_key_exists('spec', $in)) { self::saveProductSpecs($id, $in['spec']); }
         return $id;
     }
     public static function duplicateProduct(string $id): string
@@ -409,6 +613,27 @@ final class CatalogRepository
         foreach (self::images($id) as $img) {
             Database::insert('product_images', ['id'=>Helpers::uuid(),'product_id'=>$newId,'url'=>$img['url'],'alt'=>$img['alt'],
                 'sort_order'=>$img['sort_order'],'is_primary'=>$img['is_primary'],'created_at'=>Helpers::now()]);
+        }
+        foreach (Database::all('SELECT * FROM product_attribute_values WHERE product_id=:p', ['p'=>$id]) as $row) {
+            Database::insert('product_attribute_values', ['product_id'=>$newId,'attribute_id'=>$row['attribute_id'],
+                'value_id'=>$row['value_id'],'value_text'=>$row['value_text']]);
+        }
+        $variantMap = [];
+        foreach (array_slice(Database::all('SELECT * FROM product_variants WHERE product_id=:p ORDER BY created_at ASC', ['p'=>$id]), 0, 100) as $v) {
+            $newVariantId = Helpers::uuid(); $variantMap[(string)$v['id']] = $newVariantId;
+            Database::insert('product_variants', ['id'=>$newVariantId,'product_id'=>$newId,
+                'sku'=>(string)$v['sku'] . '-C' . substr(Helpers::token(3),0,5),'barcode'=>$v['barcode'],
+                'name'=>$v['name'],'options'=>$v['options'],'price_cents'=>$v['price_cents'],
+                'compare_cents'=>$v['compare_cents'],'stock'=>$v['stock'],'image_url'=>$v['image_url'],
+                'is_active'=>$v['is_active'],'created_at'=>Helpers::now(),'updated_at'=>Helpers::now()]);
+        }
+        $defaultWarehouse = Database::first('SELECT id FROM warehouses WHERE is_default=1') ?: Database::first('SELECT id FROM warehouses LIMIT 1');
+        if ($defaultWarehouse) {
+            foreach (Database::all('SELECT * FROM inventory WHERE product_id=:p', ['p'=>$id]) as $inv) {
+                Database::insert('inventory', ['id'=>Helpers::uuid(),'product_id'=>$newId,
+                    'variant_id'=>$variantMap[(string)$inv['variant_id']] ?? '', 'warehouse_id'=>$defaultWarehouse['id'],
+                    'quantity'=>$inv['quantity'],'available'=>$inv['available'],'updated_at'=>Helpers::now()]);
+            }
         }
         return $newId;
     }
@@ -471,6 +696,17 @@ final class CatalogRepository
                 'slug'=>(string)($in['slug'] ?? ''), 'price'=>(string)($in['price'] ?? '0'),
                 'compare_price'=>(string)($in['compare_price'] ?? '0'), 'stock'=>(string)($in['stock'] ?? '0'),
                 'status'=>'draft', 'category_id'=>$cat['id'] ?? '', 'brand_id'=>$brand['id'] ?? '',
+                'product_type'=>(string)($in['product_type'] ?? 'simple'),
+                'product_kind'=>(string)($in['product_kind'] ?? ($in['kind'] ?? 'physical')),
+                'short_description'=>(string)($in['short_description'] ?? ''),
+                'full_description'=>(string)($in['full_description'] ?? ''),
+                'weight_grams'=>(string)($in['weight_grams'] ?? '0'),
+                'dimensions'=>(string)($in['dimensions'] ?? ''), 'warranty'=>(string)($in['warranty'] ?? ''),
+                'tax_rate'=>(string)($in['tax_rate'] ?? '0'),
+                'digital_file_url'=>Helpers::safeMediaUrl((string)($in['digital_file_url'] ?? '')),
+                'custom_options'=>(string)($in['custom_options'] ?? ''),
+                'bundle_items'=>(string)($in['bundle_items'] ?? ''),
+                'service_details'=>(string)($in['service_details'] ?? ''),
             ]);
             $n++;
         }

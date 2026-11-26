@@ -10,11 +10,23 @@ use AllStore\Core\Database;
 use AllStore\Core\Logger;
 use AllStore\Core\AppException;
 use AllStore\Models\OrderRepository;
+use AllStore\Services\OrderMediaService;
 require_once APP_ROOT . '/includes/admin-crud.php';
 Auth::requireAdmin('orders.manage');
 $number = Request::str('number','',80);
 $order = $number !== '' ? OrderRepository::findByNumber($number) : null;
 if (!$order) { http_response_code(404); throw new AppException('Order not found.',404); }
+$items = OrderRepository::items((string)$order['id']);
+if (Request::str('download_item','',80) !== '') {
+    OrderMediaService::downloadOrderItem((string)$order['id'], Request::str('download_item','',80), $number);
+}
+if (Request::str('export_items','',10) === 'csv') {
+    Response::noCache();
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="order-'.rawurlencode($number).'-items.csv"');
+    echo OrderRepository::itemsCsv($items);
+    exit;
+}
 if (Request::isPost()) {
     Session::requireCsrf();
     try {
@@ -45,7 +57,7 @@ if (Request::isPost()) {
       catch (\Throwable $e) { Logger::exception($e); Session::flash('error','Update failed.'); }
     Response::redirect('/admin/orders/'.rawurlencode($number));
 }
-$items=OrderRepository::items((string)$order['id']); $history=OrderRepository::history((string)$order['id']);
+$history=OrderRepository::history((string)$order['id']);
 $shipment=OrderRepository::shipment((string)$order['id']); $payment=OrderRepository::payment((string)$order['id']);
 $invoice=OrderRepository::invoice((string)$order['id']); $returns=OrderRepository::returnsForOrder((string)$order['id']); $refunds=OrderRepository::refunds((string)$order['id']);
 $couriers=Database::all('SELECT id,name FROM couriers WHERE is_active=1 ORDER BY name');
@@ -53,11 +65,31 @@ $addr=(array)Helpers::decode((string)$order['shipping_address'],[]);
 admin_header(['title'=>'Order '.$number,'subtitle'=>'Fulfilment, payment and customer record','active'=>'orders']);
 echo '<div class="row-between wrap" style="margin-bottom:16px"><div><h2>'.Helpers::e($number).'</h2><p class="text-muted" style="font-size:13px">Placed '.Helpers::e(Helpers::dateNice($order['placed_at'])).' · '.admin_status($order).' '.admin_status($order,'payment_status').'</p></div><a class="btn btn-outline btn-sm" href="/admin/orders">← All orders</a></div>';
 echo '<div class="stat-grid" style="margin-bottom:16px"><div class="stat-card"><div class="stat-label">Total</div><div class="stat-value">'.Helpers::money((int)$order['total_cents']).'</div></div><div class="stat-card"><div class="stat-label">Items</div><div class="stat-value">'.count($items).'</div></div><div class="stat-card"><div class="stat-label">Customer</div><div class="stat-value" style="font-size:18px">'.Helpers::e($order['customer_name']).'</div></div><div class="stat-card"><div class="stat-label">Payment</div><div class="stat-value" style="font-size:18px">'.Helpers::e(ucfirst((string)$order['payment_method'])).'</div></div></div>';
-echo '<div class="admin-grid-2"><div class="card card-pad"><h3 style="margin-bottom:12px">Items</h3>';
-foreach ($items as $it) echo '<div class="order-row"><div class="grow"><strong style="font-size:13px">'.Helpers::e($it['name']).'</strong><div class="text-subtle" style="font-size:11px">'.Helpers::e($it['sku']).' · Qty '.(int)$it['quantity'].'</div></div><strong>'.Helpers::money((int)$it['total_cents']).'</strong></div>';
+echo '<div class="admin-grid-2"><div class="card card-pad"><div class="row-between" style="margin-bottom:12px"><h3>Items</h3><a class="btn btn-outline btn-sm" href="?export_items=csv">'.icon('download',13).' Download item list</a></div>';
+foreach ($items as $it) {
+    $d = OrderRepository::itemDetails($it);
+    echo '<div class="order-row" style="align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--c-border)">';
+    echo '<a href="'.Helpers::e($d['image_url']).'" target="_blank" rel="noopener noreferrer"><img src="'.Helpers::e($d['image_url']).'" alt="" style="width:64px;height:64px;border-radius:10px;object-fit:cover;border:1px solid var(--c-border)"></a>';
+    echo '<div class="grow"><strong style="font-size:13px">'.Helpers::e($it['name']).'</strong>';
+    echo '<div class="text-subtle" style="font-size:11px">SKU '.Helpers::e($it['sku']).' · Qty '.(int)$it['quantity'].' · '.Helpers::money((int)$it['unit_price_cents']).' each</div>';
+    if (!empty($d['product_kind'])) { echo '<div class="text-subtle" style="font-size:11px">Type: '.Helpers::e(ucwords(str_replace('_',' ', $d['product_kind']))).'</div>'; }
+    foreach ($d['options'] as $option) { echo '<div class="text-subtle" style="font-size:11px">'.Helpers::e($option['label']).': '.Helpers::e($option['value']).'</div>'; }
+    if (!empty($d['bundle_items'])) {
+        echo '<div class="text-subtle" style="font-size:11px">Bundle: ';
+        $bundleText = [];
+        foreach ($d['bundle_items'] as $b) { $bundleText[] = trim($b['sku'].' '.$b['name'].' × '.$b['qty']); }
+        echo Helpers::e(implode(' · ', $bundleText)).'</div>';
+    }
+    echo '<div class="row wrap" style="gap:5px;margin-top:7px">';
+    echo '<a class="btn btn-outline btn-sm" href="'.Helpers::e($d['image_url']).'" target="_blank" rel="noopener noreferrer">View image</a>';
+    echo '<a class="btn btn-primary btn-sm" href="?download_item='.rawurlencode((string)$it['id']).'">'.icon('download',13).' Download image</a>';
+    if (!empty($d['download_url'])) { echo '<a class="btn btn-outline btn-sm" href="'.Helpers::e($d['download_url']).'" target="_blank" rel="noopener noreferrer" download>Digital file</a>'; }
+    if (!empty($d['product_slug'])) { echo '<a class="btn btn-ghost btn-sm" href="/product/'.rawurlencode($d['product_slug']).'" target="_blank" rel="noopener noreferrer">Live product</a>'; }
+    echo '</div></div><strong>'.Helpers::money((int)$it['total_cents']).'</strong></div>';
+}
 echo '<div style="margin-top:14px"><div class="summary-line"><span>Subtotal</span><strong>'.Helpers::money((int)$order['subtotal_cents']).'</strong></div><div class="summary-line"><span>Discount</span><strong>−'.Helpers::money((int)$order['discount_cents']).'</strong></div><div class="summary-line"><span>Shipping</span><strong>'.Helpers::money((int)$order['shipping_cents']).'</strong></div><div class="summary-line"><span>Tax</span><strong>'.Helpers::money((int)$order['tax_cents']).'</strong></div><div class="summary-line total"><span>Total</span><strong>'.Helpers::money((int)$order['total_cents']).'</strong></div></div></div>';
 echo '<div class="card card-pad"><h3 style="margin-bottom:12px">Customer & delivery</h3><p style="font-size:13px;line-height:1.8">';
-foreach (['full_name','line1','line2','city','region','postal_code','country','phone'] as $k) if (!empty($addr[$k])) echo Helpers::e((string)$addr[$k]).'<br>';
+foreach (['full_name','line1','line2','city','division','district','area','area_type','region','postal_code','country','phone'] as $k) if (!empty($addr[$k])) echo Helpers::e((string)$addr[$k]).'<br>';
 echo '</p><div class="text-muted" style="font-size:12px">Email: '.Helpers::e($order['customer_email']).'<br>Phone: '.Helpers::e($order['customer_phone']).'</div>';
 if ($order['customer_note']) echo '<div class="alert alert-info" style="margin-top:12px">'.icon('message',16).'<span>'.Helpers::e($order['customer_note']).'</span></div>';
 echo '<hr><h4 style="margin-bottom:10px">Status transition</h4><form method="post">'.Session::csrfField().'<input type="hidden" name="action" value="status"><div class="form-grid"><div class="field"><label>New status</label><select class="select" name="status">';

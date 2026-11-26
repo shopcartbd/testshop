@@ -21,6 +21,10 @@ foreach ($items as $it) {
     echo '<div class="cart-item"><a href="'.Helpers::url('/product/'.$it['slug']).'"><img src="'.Helpers::e($it['image_url']).'" alt="'.Helpers::e($it['name']).'" loading="lazy"></a>';
     echo '<div><a class="row-title" style="font-weight:600" href="'.Helpers::url('/product/'.$it['slug']).'">'.Helpers::e($it['name']).'</a>';
     echo '<div class="text-muted" style="font-size:12px;margin-top:4px">'.Helpers::e($it['sku']).($it['variant_name'] ? ' · '.Helpers::e($it['variant_name']) : '').'</div>';
+    $cartDetails = Helpers::orderItemDetails((array)($it['options'] ?? []));
+    foreach ($cartDetails['options'] as $option) { echo '<div class="text-subtle" style="font-size:11px;margin-top:2px">'.Helpers::e($option['label']).': '.Helpers::e($option['value']).'</div>'; }
+    if (!empty($cartDetails['bundle_items'])) { echo '<div class="text-subtle" style="font-size:11px;margin-top:2px">Bundle: '.Helpers::e(count($cartDetails['bundle_items'])).' included items</div>'; }
+    if (!empty($it['is_digital'])) { echo '<div class="text-subtle" style="font-size:11px;margin-top:2px">Digital delivery · no courier needed</div>'; }
     if (!$it['available']) { echo '<div class="badge badge-danger" style="margin-top:8px">Unavailable — remove to checkout</div>'; }
     echo '<div class="row" style="margin-top:12px;gap:14px;flex-wrap:wrap"><div class="qty-control" style="height:36px"><button type="button" data-cart-step="-1" data-cart-item="'.Helpers::e($it['id']).'" aria-label="Decrease">'.icon('minus',14).'</button><input type="number" value="'.$it['quantity'].'" min="1" max="99" aria-label="Quantity for '.Helpers::e($it['name']).'"><button type="button" data-cart-step="1" data-cart-item="'.Helpers::e($it['id']).'" aria-label="Increase">'.icon('plus',14).'</button></div>';
     echo '<button type="button" class="btn btn-ghost btn-sm" data-save-later="'.Helpers::e($it['id']).'" data-saved="1">Save for later</button>';

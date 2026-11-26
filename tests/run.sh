@@ -19,6 +19,9 @@ echo "node --check passed for $(find assets/js -maxdepth 1 -name '*.js' | wc -l)
 echo "== Bug-fix regression checks =="
 python3 tests/validate_bugfixes.py
 
+echo "== Feature-release regression checks =="
+python3 tests/validate_release_features.py
+
 echo "== Python test syntax =="
 python3 -m py_compile tests/smoke.py
 echo "python3 -m py_compile passed"

@@ -13,6 +13,8 @@ final class ApiRoutes
             'brands' => 'brands.php',
             'search' => 'search.php',
             'search/suggest' => 'suggest.php',
+            'locations' => 'locations.php',
+            'checkout/shipping-rates' => 'checkout-rates.php',
             'cart' => 'cart.php',
             'cart/add' => 'cart-add.php',
             'cart/update' => 'cart-update.php',

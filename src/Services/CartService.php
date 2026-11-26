@@ -7,6 +7,7 @@ use AllStore\Core\Helpers;
 use AllStore\Core\Auth;
 use AllStore\Core\Session;
 use AllStore\Core\AppException;
+use AllStore\Models\CatalogRepository;
 
 /** Prices, stock, discounts, tax and totals are ALWAYS recomputed from the DB. */
 final class CartService
@@ -91,6 +92,7 @@ final class CartService
         if (!$cart) { return self::$itemsCache[$cacheKey] = []; }
         $rows = Database::all("SELECT ci.*, p.name, p.slug, p.sku, p.price_cents, p.compare_cents, p.stock,
             p.status AS product_status, p.weight_grams, p.tax_rate, p.return_eligible,
+            p.is_digital, p.product_type,
             v.name AS variant_name, v.sku AS variant_sku, v.price_cents AS variant_price, v.stock AS variant_stock, v.options AS variant_options,
             (SELECT pi.url FROM product_images pi WHERE pi.product_id=p.id ORDER BY pi.is_primary DESC, pi.sort_order ASC LIMIT 1) AS image_url
             FROM cart_items ci JOIN products p ON p.id=ci.product_id
@@ -102,8 +104,14 @@ final class CartService
             $unit = (int)($hasVariant ? $r['variant_price'] : $r['price_cents']);
             $max = (int)($hasVariant ? $r['variant_stock'] : $r['stock']);
             $qty = min(max(1, (int)$r['quantity']), 99);
-            $available = $r['product_status'] === 'active' && $max > 0 && $qty <= $max;
             $opts = (array)Helpers::decode($r['variant_options'] ?? null, []);
+            $stockVariantId = Helpers::orderStockVariantId(['variant_id'=>(string)$r['variant_id'],'options'=>$opts]);
+            if ($stockVariantId !== '' && $stockVariantId !== (string)$r['variant_id']) {
+                $baseStock = Database::value('SELECT stock FROM product_variants WHERE id=:i', ['i'=>$stockVariantId]);
+                if ($baseStock !== null && $baseStock !== false) { $max = (int)$baseStock; }
+            }
+            $available = $r['product_status'] === 'active' && $max > 0 && $qty <= $max;
+            $requiresShipping = (int)($r['is_digital'] ?? 0) !== 1;
             $out[] = [
                 'id'=>$r['id'], 'product_id'=>$r['product_id'], 'variant_id'=>(string)$r['variant_id'],
                 'name'=>$r['name'], 'slug'=>$r['slug'], 'sku'=>(string)($hasVariant ? $r['variant_sku'] : $r['sku']),
@@ -112,7 +120,9 @@ final class CartService
                 'unit_price_cents'=>$unit, 'quantity'=>$qty, 'max_stock'=>$max,
                 'line_total_cents'=>$unit * $qty, 'available'=>$available,
                 'weight_grams'=>(int)$r['weight_grams'], 'tax_rate'=>(float)$r['tax_rate'],
-                'saved_for_later'=>(int)$r['saved_for_later'],
+                'saved_for_later'=>(int)$r['saved_for_later'], 'product_type'=>(string)($r['product_type'] ?? 'simple'),
+                'is_digital'=>(int)($r['is_digital'] ?? 0), 'requires_shipping'=>$requiresShipping,
+                'stock_variant_id'=>$stockVariantId,
             ];
         }
         return self::$itemsCache[$cacheKey] = $out;
@@ -132,19 +142,27 @@ final class CartService
         return $s;
     }
 
-    public static function add(string $productId, string $variantId = '', int $qty = 1): array
+    public static function add(string $productId, string $variantId = '', int $qty = 1, array $customOptions = []): array
     {
         $qty = max(1, min(99, $qty));
         $p = Database::first("SELECT * FROM products WHERE id=:i AND status='active' AND deleted_at IS NULL", ['i'=>$productId]);
         if (!$p) { throw new AppException('This product is no longer available.', 404); }
         $stock = (int)$p['stock'];
         $price = (int)$p['price_cents'];
+        $baseVariant = null;
         if ($variantId !== '') {
             $v = Database::first('SELECT * FROM product_variants WHERE id=:i AND product_id=:p AND is_active=1', ['i'=>$variantId,'p'=>$productId]);
             if (!$v) { throw new AppException('The selected variant is not available.', 404); }
+            $baseVariant = $v;
             $stock = (int)$v['stock']; $price = (int)$v['price_cents'];
         }
         if ($stock < 1) { throw new AppException('This item is currently out of stock.', 409); }
+        $definitions = CatalogRepository::customOptions($productId);
+        if ($customOptions !== [] && $definitions === []) {
+            throw new AppException('This product does not accept custom options.', 422);
+        }
+        $customOptions = $definitions === [] ? [] : CatalogRepository::validateCustomOptions($definitions, $customOptions);
+        if ($customOptions !== []) { $variantId = self::customVariant($p, $baseVariant, $variantId, $price, $customOptions); }
         $cart = self::cart();
         $existing = Database::first('SELECT * FROM cart_items WHERE cart_id=:c AND product_id=:p AND variant_id=:v AND saved_for_later=0',
             ['c'=>$cart['id'],'p'=>$productId,'v'=>$variantId]);
@@ -159,6 +177,54 @@ final class CartService
         }
         self::touchCart();
         return ['count'=>self::count(), 'price_cents'=>$price];
+    }
+
+    /** Persist a configured custom product as a deterministic active variant. */
+    private static function customVariant(array $p, ?array $baseVariant, string $baseVariantId, int $price, array $customOptions): string
+    {
+        $productId = (string)$p['id'];
+        $meta = CatalogRepository::productMeta($productId);
+        $snapshot = $customOptions;
+        if ($baseVariant !== null) {
+            foreach ((array)Helpers::decode((string)($baseVariant['options'] ?? '{}'), []) as $k => $v) {
+                if (!str_starts_with((string)$k, '__')) { $snapshot[(string)$k] = $v; }
+            }
+            $snapshot['__base_variant_id'] = $baseVariantId;
+        }
+        $snapshot['__product_kind'] = $meta['kind'];
+        if ($meta['digital_file_url'] !== '') { $snapshot['__download_url'] = $meta['digital_file_url']; }
+        if ($meta['bundle_items'] !== []) { $snapshot['__bundle_items'] = $meta['bundle_items']; }
+        $json = Helpers::json($snapshot);
+        $hash = hash('sha256', $productId . '|' . $baseVariantId . '|' . $json);
+        $id = 'custom-' . substr($hash, 0, 32);
+        $sku = 'CUSTOM-' . strtoupper(substr($hash, 0, 16));
+        $labels = [];
+        foreach ($customOptions as $row) { $labels[] = (string)($row['label'] ?? '') . ': ' . (string)($row['value'] ?? ''); }
+        $name = mb_substr(($baseVariant['name'] ?? $p['name']) . ($labels !== [] ? ' — ' . implode(', ', $labels) : ' — Custom'), 0, 120);
+        $image = (string)($baseVariant['image_url'] ?? '');
+        if ($image === '') {
+            $image = (string)Database::value('SELECT url FROM product_images WHERE product_id=:p ORDER BY is_primary DESC, sort_order ASC LIMIT 1', ['p'=>$productId]);
+        }
+        $row = Database::first('SELECT * FROM product_variants WHERE sku=:s', ['s'=>$sku]);
+        if ($row && (string)$row['product_id'] === $productId) { return (string)$row['id']; }
+        $data = [
+            'id'=>$id, 'product_id'=>$productId, 'sku'=>$sku, 'barcode'=>'', 'name'=>$name,
+            'options'=>$json, 'price_cents'=>$price, 'compare_cents'=>(int)($p['compare_cents'] ?? 0),
+            'stock'=>999999, 'image_url'=>$image, 'is_active'=>1,
+            'created_at'=>Helpers::now(), 'updated_at'=>Helpers::now(),
+        ];
+        $exists = Database::first('SELECT id FROM product_variants WHERE id=:i', ['i'=>$id]);
+        if ($exists) { Database::update('product_variants', ['sku'=>$sku,'name'=>$name,'options'=>$json,'price_cents'=>$price,'image_url'=>$image,'updated_at'=>Helpers::now()], 'id=:i', ['i'=>$id]); }
+        else { Database::insert('product_variants', $data); }
+        return $id;
+    }
+
+    public static function needsShipping(): bool
+    {
+        $items = self::items();
+        if ($items === []) { return true; }
+        foreach ($items as $i) { if (!empty($i['requires_shipping'])) { return true; } }
+        return false;
     }
 
     private static function ownedItem(string $itemId): array
@@ -221,7 +287,7 @@ final class CartService
         return strtoupper((string)($cart['coupon_code'] ?? ''));
     }
 
-    public static function totals(?string $shippingMethod = null, ?string $country = null): array
+    public static function totals(?string $shippingMethod = null, ?string $country = null, array $location = []): array
     {
         $items = self::items();
         $subtotal = 0; $weight = 0; $tax = 0; $unavailable = false;
@@ -232,9 +298,12 @@ final class CartService
         }
         $couponResult = CouponService::validate(self::couponCode(), $subtotal, $items);
         $discount = $couponResult['ok'] ? (int)$couponResult['discount_cents'] : 0;
-        $country ??= strtoupper((string)(Session::get('checkout_country') ?: Helpers::setting('default_country', 'US')));
+        $country ??= strtoupper((string)(Session::get('checkout_country') ?: \AllStore\Services\LocationService::defaultCountry()));
+        $requiresShipping = self::needsShipping();
+        $location = is_array($location) ? $location : [];
+        $location['digital_only'] = !$requiresShipping;
         $shipping = ShippingService::pick($shippingMethod ?: (string)(Session::get('checkout_shipping_method') ?: 'standard'),
-            $country, $weight, max(0, $subtotal - $discount), $couponResult['free_shipping']);
+            $country, $weight, max(0, $subtotal - $discount), $couponResult['free_shipping'], $location);
         $afterDiscount = max(0, $subtotal - $discount);
         if ($afterDiscount > 0) {
             foreach ($items as $i) {
@@ -251,6 +320,7 @@ final class CartService
             'coupon_valid'=>$couponResult['ok'], 'coupon_message'=>$couponResult['message'],
             'free_shipping'=>$couponResult['free_shipping'], 'shipping'=>$shipping,
             'country'=>$country, 'has_unavailable'=>$unavailable,
+            'requires_shipping'=>$requiresShipping, 'location'=>$location,
         ];
     }
 

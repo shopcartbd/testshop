@@ -55,7 +55,7 @@ $settings = [
     'store_name'=>(string)Config::get('app.name'), 'store_tagline'=>'Everything you need, thoughtfully curated.',
     'announcement_text'=>'Complimentary shipping on orders over $75  •  New arrivals every week',
     'announcement_enabled'=>'1', 'contact_email'=>'hello@allstore.example', 'contact_phone'=>'+1 555 010 2040',
-    'store_address'=>'24 Market Street, Suite 200, San Francisco, CA', 'default_country'=>'US',
+    'store_address'=>'24 Market Street, Suite 200, San Francisco, CA', 'default_country'=>'BD', 'checkout_default_country'=>'BD',
     'default_shipping_cents'=>'799', 'cod_enabled'=>'1', 'free_shipping_threshold_cents'=>'7500',
     'currency'=>(string)Config::get('app.currency'), 'footer_about'=>'A modern marketplace for considered everyday goods.',
     'social_instagram'=>'https://instagram.com', 'social_x'=>'https://x.com', 'social_facebook'=>'https://facebook.com',
@@ -260,7 +260,7 @@ foreach ([
         'first_order_only'=>$first,'free_shipping'=>$free,'is_active'=>1,'created_at'=>$now,'updated_at'=>$now]);
 }
 $zone = allstore_seed_uuid();
-allstore_seed_row('shipping_zones', ['id'=>$zone,'name'=>'United States','countries'=>Helpers::json(['US','*']),'regions'=>'[]','cities'=>'[]','is_active'=>1,'sort_order'=>0,'created_at'=>$now]);
+allstore_seed_row('shipping_zones', ['id'=>$zone,'name'=>'Bangladesh & worldwide','countries'=>Helpers::json(['BD','*']),'regions'=>'[]','cities'=>'[]','is_active'=>1,'sort_order'=>0,'created_at'=>$now]);
 allstore_seed_row('shipping_rates', ['id'=>allstore_seed_uuid(),'zone_id'=>$zone,'name'=>'Standard Delivery','method'=>'standard','min_weight_grams'=>0,
     'max_weight_grams'=>0,'min_order_cents'=>0,'cost_cents'=>799,'free_above_cents'=>7500,
     'estimated_days_min'=>3,'estimated_days_max'=>6,'is_active'=>1,'created_at'=>$now]);

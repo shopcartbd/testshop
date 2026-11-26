@@ -92,3 +92,17 @@ Verification after these fixes:
 - Clean `/home/user/allstore.zip`: 234 entries, 187 PHP files, integrity `ok`, `regions:["sin1"]`, no exact token literals or local secrets.
 
 These are **local** results. Promotion of this specific release to the existing Vercel production deployment is recorded in the workspace handoff separately; it is not implied by the local test run.
+
+## 2026-11-25 feature release — ordered media, all product kinds, Bangladesh checkout
+
+A second follow-up added admin order product images/downloads, generic product support and an admin-managed Bangladesh division/district/upazila/thana hierarchy. See `docs/FEATURE_RELEASE_2026-11-25.md`. No new SQL table or user-run migration is required; new state uses bundled JSON, `settings`, existing attribute/order/address JSON columns and existing `order_items` fields.
+
+Verification after these changes:
+
+- `bash tests/run.sh`: **192 PHP** syntax, **5 JS** syntax, **15/0** bug-fix static checks, **32/0** new feature static checks, **650** route/handler checks, **40** Vercel-readiness checks, **73/0 HTTP smoke checks**.
+- `tests/validate_release_features.py`: bundled 8 divisions / 64 districts / 495 upazilas with CC-BY-4.0 attribution, reusable BD cascade, admin location CRUD/storage, checkout + address book, admin image/CSV download, SSRF guards, all product kinds, custom order fields, private digital files, digital-only checkout, shipping-zone matching, customer order views and BD defaults; **32/0**.
+- Local runtime verification: **35/35** checks covering `/api/locations`, `/api/checkout/shipping-rates`, admin division/district/thana CRUD and reset, custom product → cart → BD checkout → admin image/CSV/download, digital-only checkout, account address book, missing-area rejection and private digital upload.
+- Headless Chromium: **8/8** checks; add-to-cart, BD cascade auto-fill, live rates, shipping methods, admin order media, exact custom selections, **0 console/page errors**. Screenshots are outside the source ZIP at `/home/user/checkout_bd_local.png` and `/home/user/admin_order_media_local.png`.
+- Final clean `/home/user/allstore.zip`: approximately **1.42 MB**, **244 entries**, **192 PHP**, **11 Markdown docs**, integrity `ok`, forbidden entries `0`, `regions:["sin1"]`, no `.env`/SQLite/local admin credential/exact token literal.
+
+These are **local-source** results. This feature release has not yet been promoted to GitHub/Vercel in this workspace state; see `/home/user/FEATURE_RELEASE_REPORT_BN.md` for the explicit local/live/pending status.

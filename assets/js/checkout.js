@@ -1,0 +1,98 @@
+/* AllStore :: live delivery rates and totals for checkout.
+   The reusable Bangladesh cascade lives in bd-locations.js and dispatches
+   bd-location-change whenever country/division/district/area changes. */
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const country = $('country');
+  const division = $('division_id');
+  const district = $('district_id');
+  const area = $('area_id');
+  const shippingBox = $('checkoutShippingMethods');
+  const shippingTitle = $('checkoutShippingTitle');
+  if (!country || !shippingBox || !division || !district || !area) return;
+  let requestSeq = 0;
+
+  const renderTotals = (totals) => {
+    if (!totals) return;
+    ['subtotal', 'discount', 'shipping', 'tax', 'total'].forEach((key) => {
+      const el = document.querySelector('[data-checkout-total="' + key + '"]');
+      if (el && totals[key] !== undefined) el.textContent = totals[key];
+    });
+  };
+  const renderRates = (data) => {
+    const rates = Array.isArray(data.rates) ? data.rates : [];
+    const previous = document.querySelector('input[name="shipping_method"]:checked');
+    const previousValue = previous ? previous.value : '';
+    shippingBox.textContent = '';
+    if (rates.length === 0) {
+      const note = document.createElement('p');
+      note.className = 'text-muted';
+      note.textContent = 'No delivery charge is needed for this order.';
+      shippingBox.appendChild(note);
+      const hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = 'shipping_method';
+      hidden.value = 'digital';
+      shippingBox.appendChild(hidden);
+      return;
+    }
+    rates.forEach((rate, index) => {
+      const element = document.createElement('label');
+      element.className = 'method-option';
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = 'shipping_method';
+      input.value = rate.method || '';
+      input.checked = previousValue ? previousValue === input.value : index === 0;
+      input.addEventListener('change', refreshRates);
+      const holder = document.createElement('span');
+      const strong = document.createElement('strong');
+      strong.textContent = rate.cost_cents > 0
+        ? rate.name + ' — ' + (rate.cost_label || '')
+        : rate.name + ' — Free';
+      const small = document.createElement('span');
+      small.textContent = rate.estimate || 'Delivery estimate will be confirmed with your order.';
+      holder.appendChild(strong);
+      holder.appendChild(small);
+      element.appendChild(input);
+      element.appendChild(holder);
+      shippingBox.appendChild(element);
+    });
+  };
+  function refreshRates() {
+    const seq = ++requestSeq;
+    const isBd = country.value === 'BD';
+    const partial = (division.value || district.value || area.value)
+      && !(division.value && district.value && area.value);
+    if (isBd && partial) return; // cascade is still being completed
+    const params = new URLSearchParams({
+      country: country.value,
+      division_id: division.value || '',
+      district_id: district.value || '',
+      area_id: area.value || '',
+    });
+    const chosen = document.querySelector('input[name="shipping_method"]:checked');
+    if (chosen) params.set('shipping_method', chosen.value);
+    fetch('/api/checkout/shipping-rates?' + params.toString(), {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+    })
+      .then((r) => r.json())
+      .then((json) => {
+        if (seq !== requestSeq || !json.success || !json.data) return;
+        renderRates(json.data);
+        renderTotals(json.data.totals);
+        if (shippingTitle) {
+          shippingTitle.textContent = json.data.requires_shipping === false
+            ? 'Digital delivery — no courier needed'
+            : 'Shipping method';
+        }
+      })
+      .catch(() => {});
+  }
+  document.addEventListener('bd-location-change', refreshRates);
+  shippingBox.addEventListener('change', (event) => {
+    if (event.target && event.target.name === 'shipping_method') refreshRates();
+  });
+})();

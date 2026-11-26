@@ -22,6 +22,20 @@ if (Request::isPost()) {
         $in = Request::all();
         $video = trim((string)($in['video_url'] ?? ''));
         $in['video_url'] = $video === '' ? '' : admin_safe_url($video);
+        $digitalFile = $_FILES['digital_file'] ?? null;
+        if (is_array($digitalFile) && (int)($digitalFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+            $in['digital_file_url'] = UploadService::store($digitalFile, true, true);
+        } else {
+            $digital = trim(Request::str('digital_file_url','',1000));
+            $in['digital_file_url'] = preg_match('#^supabase-private:[A-Za-z0-9/_\.\-]{1,300}$#', $digital)
+                ? $digital : ($digital === '' ? '' : admin_safe_url($digital));
+        }
+        $in['product_kind'] = Request::str('product_kind','physical',40);
+        $in['custom_options'] = Request::str('custom_options','',20000);
+        $in['bundle_items'] = Request::str('bundle_items','',20000);
+        $in['service_details'] = Request::str('service_details','',20000);
+        $spec = Request::input('spec', []);
+        $in['spec'] = is_array($spec) ? $spec : [];
         $images = preg_split('/\r\n|\r|\n/', Request::str('gallery_urls','',20000)) ?: [];
         $images = array_values(array_filter(array_map('trim',$images), static fn($u)=>$u!==''));
         $upload = $_FILES['image_file'] ?? null;
@@ -39,6 +53,24 @@ $p = $p ?: [];
 $cats = Database::all('SELECT id,name FROM categories WHERE deleted_at IS NULL ORDER BY name');
 $brands = Database::all('SELECT id,name FROM brands WHERE is_active=1 ORDER BY name');
 $gallery = $id !== '' ? array_column(CatalogRepository::images($id),'url') : [];
+$meta = $id !== '' ? CatalogRepository::productMeta($id) : ['kind'=>'physical','custom_options_text'=>'','digital_file_url'=>'','bundle_items_text'=>'','service_details'=>''];
+$specDefs = Database::all("SELECT id,name,type,unit FROM attributes WHERE slug NOT LIKE 'system-%' ORDER BY name");
+$specMap = [];
+if ($id !== '') {
+    foreach (Database::all("SELECT attribute_id,value_text FROM product_attribute_values WHERE product_id=:p AND value_id=''", ['p'=>$id]) as $row) {
+        $specMap[(string)$row['attribute_id']] = (string)($row['value_text'] ?? '');
+    }
+}
+$attrChoices = [];
+foreach (Database::all('SELECT attribute_id,label FROM attribute_values ORDER BY sort_order,label') as $row) {
+    $attrChoices[(string)$row['attribute_id']][] = (string)$row['label'];
+}
+$submittedSpec = Request::input('spec', []);
+$submittedSpec = is_array($submittedSpec) ? $submittedSpec : [];
+$metaText = static function(string $field, string $metaKey) use ($meta): string {
+    return Helpers::e(Request::str($field, (string)($meta[$metaKey] ?? ''), 20000));
+};
+$kind = (string)Request::input('product_kind', (string)($meta['kind'] ?? 'physical'));
 $v = static function(string $k, string $d='', int $max=2000) use ($p): string { return Helpers::e(Request::str($k, (string)($p[$k] ?? $d), $max)); };
 $money = static function(string $k, string $col) use ($p): string { return Helpers::e(Request::str($k, number_format(((int)($p[$col] ?? 0))/100,2,'.',''))); };
 $chk = static function(string $k, int $d=0) use ($p): string { return (Request::isPost()?Request::bool($k):(int)($p[$k] ?? $d)) ? 'checked' : ''; };
@@ -49,7 +81,7 @@ echo '<div class="field span-2"><label for="name">Product name *</label><input c
 echo '<div class="field"><label for="slug">URL slug</label><input class="input" id="slug" name="slug" maxlength="180" value="'.$v('slug').'"><span class="field-hint">Leave blank to generate from the name.</span></div>';
 echo '<div class="field"><label for="sku">SKU</label><input class="input" id="sku" name="sku" maxlength="64" value="'.$v('sku').'"></div>';
 echo '<div class="field"><label for="barcode">Barcode</label><input class="input" id="barcode" name="barcode" maxlength="64" value="'.$v('barcode').'"></div>';
-echo '<div class="field"><label for="product_type">Product type</label><select class="select" id="product_type" name="product_type">';
+echo '<div class="field"><label for="product_type">Catalogue structure</label><select class="select" id="product_type" name="product_type">';
 foreach (['simple'=>'Simple','variable'=>'Variable','bundle'=>'Bundle','digital'=>'Digital'] as $k=>$label) { echo '<option value="'.$k.'" '.$sel('product_type',$k).'>'.$label.'</option>'; }
 echo '</select></div>';
 echo '<div class="field"><label for="category_id">Category</label><select class="select" id="category_id" name="category_id"><option value="">— None —</option>';
@@ -81,6 +113,39 @@ echo '<div class="field span-2"><label for="image_file">Upload an image and add 
 echo '<div class="field span-2"><label for="seo_title">SEO title</label><input class="input" id="seo_title" name="seo_title" value="'.$v('seo_title').'"></div>';
 echo '<div class="field span-2"><label for="seo_description">SEO description</label><textarea class="textarea" id="seo_description" name="seo_description">'.$v('seo_description').'</textarea></div>';
 echo '</div></div></div>';
+echo '<div class="card card-pad" style="margin-top:16px"><h3 style="margin-bottom:12px">All product types & order details</h3><div class="form-grid">';
+echo '<div class="field span-2"><label for="product_kind">What are you selling? *</label><select class="select" id="product_kind" name="product_kind">';
+foreach ([
+ 'physical'=>'Physical product (courier delivery)',
+ 'digital'=>'Digital download / file',
+ 'service'=>'Service or booking',
+ 'subscription'=>'Subscription / membership',
+ 'custom'=>'Custom-made / personalised product',
+ 'bundle'=>'Bundle or kit',
+ 'variable'=>'Variable product (options and variants)',
+] as $k=>$label) { echo '<option value="'.Helpers::e($k).'" '.($kind===$k?'selected':'').'>'.Helpers::e($label).'</option>'; }
+echo '</select><span class="field-hint">Digital, service and subscription products need no courier and receive unlimited stock. Any category can sell any kind.</span></div>';
+echo '<div class="field span-2"><label for="custom_options">Customer order fields (one per line: Label|text/textarea/select|required|Choice 1,Choice 2)</label><textarea class="textarea" id="custom_options" name="custom_options" style="min-height:80px" placeholder="Name on card|text|required|">'.$metaText('custom_options','custom_options_text').'</textarea><span class="field-hint">These fields appear on the product page and are saved with the ordered item.</span></div>';
+echo '<div class="field span-2"><label for="digital_file_url">Digital delivery file URL (https or /storage/uploads/...)</label><input class="input" type="url" id="digital_file_url" name="digital_file_url" maxlength="1000" value="'.$metaText('digital_file_url','digital_file_url').'"></div>';
+echo '<div class="field span-2"><label for="digital_file">Or upload a private digital delivery file (PDF, ZIP, image or text)</label><input class="input" type="file" id="digital_file" name="digital_file" accept=".pdf,.zip,.png,.jpg,.jpeg,.webp,.gif,.txt"><span class="field-hint">Uploaded files are stored privately and shown to the customer only after payment is confirmed. Visible to admins in the order.</span></div>';
+echo '<div class="field span-2"><label for="bundle_items">Bundle contents (one per line: SKU|Name|Qty)</label><textarea class="textarea" id="bundle_items" name="bundle_items" style="min-height:80px" placeholder="AS-0001|Aurora Headphones|1">'.$metaText('bundle_items','bundle_items_text').'</textarea><span class="field-hint">Saved with each order so admin can see exactly what was included.</span></div>';
+echo '<div class="field span-2"><label for="service_details">Service / subscription details</label><textarea class="textarea" id="service_details" name="service_details" style="min-height:80px">'.$metaText('service_details','service_details').'</textarea></div>';
+echo '</div><h4 style="margin:18px 0 10px">Specifications</h4><div class="form-grid">';
+foreach ($specDefs as $a) {
+    $aid = (string)$a['id'];
+    $value = (string)($submittedSpec[$aid] ?? ($specMap[$aid] ?? ''));
+    $listId = 'spec_values_' . preg_replace('/[^A-Za-z0-9_\-]/', '', $aid);
+    echo '<div class="field"><label for="spec_'.Helpers::e($aid).'">'.Helpers::e($a['name']).($a['unit'] !== '' ? ' ('.Helpers::e($a['unit']).')' : '').'</label>';
+    echo '<input class="input" id="spec_'.Helpers::e($aid).'" name="spec['.Helpers::e($aid).']" list="'.Helpers::e($listId).'" maxlength="300" value="'.Helpers::e($value).'">';
+    if (!empty($attrChoices[$aid])) {
+        echo '<datalist id="'.Helpers::e($listId).'">';
+        foreach ($attrChoices[$aid] as $choice) { echo '<option value="'.Helpers::e($choice).'"></option>'; }
+        echo '</datalist>';
+    }
+    echo '</div>';
+}
+if ($specDefs === []) { echo '<div class="field span-2"><span class="field-hint">Create reusable specifications in <a class="text-brand" href="/admin/attributes">Attributes</a>.</span></div>'; }
+echo '</div><div class="alert alert-info" style="margin-top:14px">'.icon('info',16).'<span>Images, custom fields, bundle contents and digital links are copied into each order line so the admin always sees exactly what the customer ordered.</span></div></div>';
 echo '<div class="card card-pad" style="margin-top:16px"><h3 style="margin-bottom:12px">Merchandising</h3><div class="row wrap" style="gap:24px">';
 foreach (['is_featured'=>'Featured','is_best_seller'=>'Best seller','is_new_arrival'=>'New arrival','is_trending'=>'Trending','return_eligible'=>'Return eligible'] as $k=>$label) { echo '<label class="checkbox"><input type="checkbox" name="'.$k.'" value="1" '.$chk($k,$k==='return_eligible'?1:0).'><span>'.$label.'</span></label>'; }
 echo '</div></div><div class="row" style="margin-top:16px"><button class="btn btn-primary btn-lg" type="submit">'.icon('check',16).'Save product</button><a class="btn btn-outline btn-lg" href="/admin/products">Cancel</a>'.($id!==''?'<a class="btn btn-outline btn-lg" href="/admin/products/'.Helpers::e($id).'/variants">'.icon('sliders',16).'Manage variants</a>':'').'</div></form>';

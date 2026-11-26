@@ -18,6 +18,7 @@ $images = CatalogRepository::images((string)$p['id']);
 if ($images === []) { $images = [['url'=>$p['image_url'] ?: '/assets/img/products/headphones.jpg','alt'=>$p['name']]]; }
 $variants = CatalogRepository::variants((string)$p['id']);
 $attrs = CatalogRepository::productAttributes((string)$p['id']);
+$meta = CatalogRepository::productMeta((string)$p['id']);
 $reviews = CatalogRepository::reviews((string)$p['id'], 12);
 $ratingSummary = CatalogRepository::ratingSummary((string)$p['id']);
 $related = CatalogRepository::related((string)$p['id'], (string)($p['category_id'] ?? ''), 8);
@@ -66,7 +67,7 @@ require APP_ROOT . '/includes/header.php';
     </div>
     <p class="text-muted" style="font-size:var(--fs-sm)"><?= Helpers::e($p['short_description']) ?></p>
     <div class="pdp-block">
-      <div class="row-between"><strong data-pdp-stock class="<?= (int)$p['stock'] > 0 ? 'text-success' : 'text-danger' ?>"><?= (int)$p['stock'] > 0 ? 'In stock ('.(int)$p['stock'].' available)' : 'Out of stock' ?></strong><span class="text-muted" style="font-size:12px">Ships from our main warehouse</span></div>
+      <div class="row-between"><strong data-pdp-stock class="<?= (int)$p['stock'] > 0 ? 'text-success' : 'text-danger' ?>"><?= (int)$p['is_digital'] === 1 ? 'Digital delivery — unlimited availability' : ((int)$p['stock'] > 0 ? 'In stock ('.(int)$p['stock'].' available)' : 'Out of stock') ?></strong><span class="text-muted" style="font-size:12px"><?= (int)$p['is_digital'] === 1 ? 'Delivered to your email — no courier needed' : 'Ships from our main warehouse' ?></span></div>
     </div>
     <?php if ($variants !== []): ?>
     <div class="pdp-block"><h4>Choose an option</h4>
@@ -80,6 +81,29 @@ require APP_ROOT . '/includes/header.php';
       <input type="hidden" data-pdp-variant value="">
     </div>
     <?php else: ?><input type="hidden" data-pdp-variant value=""><?php endif; ?>
+    <?php if (!empty($meta['custom_options'])): ?>
+    <div class="pdp-block"><h4><?= $meta['kind'] === 'custom' ? 'Customise your order' : 'Order details' ?></h4>
+      <?php foreach ($meta['custom_options'] as $option):
+        $fieldId = 'custom_' . $option['slug'];
+        $label = Helpers::e($option['label']) . (!empty($option['required']) ? ' *' : '');
+      ?>
+      <div class="field" style="margin-bottom:12px">
+        <label for="<?= Helpers::e($fieldId) ?>"><?= $label ?></label>
+        <?php if ($option['type'] === 'select'): ?>
+          <select class="select" id="<?= Helpers::e($fieldId) ?>" name="custom_option[<?= Helpers::e($option['slug']) ?>]" data-custom-option data-label="<?= Helpers::e($option['label']) ?>" data-required="<?= !empty($option['required']) ? '1' : '0' ?>">
+            <option value="">Choose an option</option>
+            <?php foreach ($option['choices'] as $choice): ?><option value="<?= Helpers::e($choice) ?>"><?= Helpers::e($choice) ?></option><?php endforeach; ?>
+          </select>
+        <?php elseif ($option['type'] === 'textarea'): ?>
+          <textarea class="textarea" id="<?= Helpers::e($fieldId) ?>" name="custom_option[<?= Helpers::e($option['slug']) ?>]" maxlength="300" style="min-height:72px" data-custom-option data-label="<?= Helpers::e($option['label']) ?>" data-required="<?= !empty($option['required']) ? '1' : '0' ?>"></textarea>
+        <?php else: ?>
+          <input class="input" id="<?= Helpers::e($fieldId) ?>" name="custom_option[<?= Helpers::e($option['slug']) ?>]" maxlength="300" data-custom-option data-label="<?= Helpers::e($option['label']) ?>" data-required="<?= !empty($option['required']) ? '1' : '0' ?>">
+        <?php endif; ?>
+      </div>
+      <?php endforeach; ?>
+      <span class="field-hint">These details are saved with the ordered item and shown to the admin.</span>
+    </div>
+    <?php endif; ?>
     <div class="pdp-block"><h4>Quantity</h4>
       <div class="qty-control"><button type="button" data-cart-step="-1" aria-label="Decrease quantity"><?= icon('minus',16) ?></button><input type="number" value="1" min="1" max="99" data-pdp-qty aria-label="Quantity"><button type="button" data-cart-step="1" aria-label="Increase quantity"><?= icon('plus',16) ?></button></div>
     </div>
@@ -103,7 +127,12 @@ require APP_ROOT . '/includes/header.php';
     <button type="button" data-tab="reviews" role="tab">Reviews (<?= (int)$p['rating_count'] ?>)</button>
     <button type="button" data-tab="qa" role="tab">Questions</button>
   </div>
-  <div class="tab-panel active" data-tab-panel="description"><div class="prose" style="max-width:80ch"><p itemprop="description"><?= nl2br(Helpers::e((string)$p['full_description'])) ?></p></div></div>
+  <div class="tab-panel active" data-tab-panel="description"><div class="prose" style="max-width:80ch"><p itemprop="description"><?= nl2br(Helpers::e((string)$p['full_description'])) ?></p>
+    <?php if ($meta['kind'] !== 'physical'): ?><p><strong>Product type:</strong> <?= Helpers::e(ucwords(str_replace('_',' ', $meta['kind']))) ?>.</p><?php endif; ?>
+    <?php if ($meta['service_details'] !== ''): ?><p><?= nl2br(Helpers::e($meta['service_details'])) ?></p><?php endif; ?>
+    <?php if ($meta['kind'] === 'digital' || $meta['kind'] === 'service' || $meta['kind'] === 'subscription'): ?><p>Digital fulfilment is shown in your order after the store confirms payment. No courier is required.</p><?php endif; ?>
+    <?php if (!empty($meta['bundle_items'])): ?><h3>Included in this bundle</h3><ul><?php foreach ($meta['bundle_items'] as $bundle): ?><li><?= Helpers::e($bundle['name']) ?><?= $bundle['sku'] !== '' ? ' ('.Helpers::e($bundle['sku']).')' : '' ?> × <?= (int)$bundle['qty'] ?></li><?php endforeach; ?></ul><?php endif; ?>
+  </div></div>
   <div class="tab-panel" data-tab-panel="specs"><table class="spec-table">
     <tr><th>Brand</th><td><?= Helpers::e($p['brand_name'] ?? '—') ?></td></tr>
     <tr><th>SKU</th><td><?= Helpers::e($p['sku']) ?></td></tr>
