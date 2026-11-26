@@ -162,9 +162,10 @@
 .newsletter { background: var(--c-surface-2); border: 1px solid var(--c-border); border-radius: var(--radius-xl); padding: clamp(28px, 5vw, 60px); display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-8); align-items: center; }
 .newsletter h2 { font-size: var(--fs-2xl); }
 .newsletter p { color: var(--c-muted); margin-top: var(--sp-2); }
-.newsletter-form { display: flex; gap: var(--sp-2); }
-.newsletter-form .input { min-height: 48px; }
+.newsletter-form { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.newsletter-form .input { min-height: 48px; flex: 1 1 220px; }
 .newsletter-form .btn { min-height: 48px; }
+.newsletter-form .field-error { flex-basis: 100%; }
 
 /* ------------------------------------------------------------------ footer */
 .site-footer { background: var(--c-ink); color: #c9d1ce; margin-top: var(--sp-11); }

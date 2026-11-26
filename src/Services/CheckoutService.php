@@ -199,6 +199,8 @@ final class CheckoutService
             throw new AppException('We could not complete your order. No charge was made and stock was not changed. Please try again.', 500);
         }
 
+        // CheckoutService mutates cart tables directly inside its transaction.
+        CartService::invalidate();
         // Keep the submitted key tied to this exact order; issue a fresh key for the next checkout.
         self::rotateIdempotencyKey();
         Logger::audit('order.created', 'orders', $orderId, ['number'=>$orderNumber,'total_cents'=>$grand]);

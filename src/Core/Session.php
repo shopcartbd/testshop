@@ -57,7 +57,8 @@ final class Session
             ]);
         } catch (\Throwable $e) { Logger::exception($e); throw new AppException('Session storage unavailable.', 500); }
         self::setCookie(self::$token);
-        self::$dirty = true;
+        // The INSERT above already persisted the initial state.
+        self::$dirty = false;
     }
 
     private static function setCookie(string $value): void
@@ -144,6 +145,11 @@ final class Session
     }
     public static function prune(): void
     {
-        try { Database::delete('sessions', 'expires_at < :now', ['now'=>Helpers::now()]); } catch (\Throwable) {}
+        // A DELETE on every request adds a cross-region DB round trip. Run
+        // housekeeping on a small random sample of requests instead.
+        try {
+            if (random_int(1, 200) !== 1) { return; }
+            Database::delete('sessions', 'expires_at < :now', ['now'=>Helpers::now()]);
+        } catch (\Throwable) {}
     }
 }

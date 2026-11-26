@@ -7,6 +7,10 @@ use AllStore\Core\Session;
 use AllStore\Services\NotificationService;
 require_once __DIR__ . '/components.php';
 
+// This file is included before account page logic. Guard here so no DB query,
+// POST mutation or redirect happens for a guest before authentication.
+Auth::requireLogin();
+
 function account_header(string $active, string $title, string $subtitle = ''): void
 {
     global $page;

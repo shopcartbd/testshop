@@ -76,7 +76,19 @@ The following remain **unverified** and are listed in `KNOWN_LIMITATIONS.md`:
 
 `/home/user/allstore.zip` was built from the final source tree. Archive verification results:
 
-- ZIP integrity: `ok`; **232 entries**, approximately **1.36 MB** compressed.
+- ZIP integrity: `ok`; **234 entries**, approximately **1.38 MB** compressed (includes `tests/validate_bugfixes.py` and `docs/BUGFIXES_2026-11-26.md`).
 - All **187 source PHP files** (including `tests/static_bootstrap.php`, `tests/validate_vercel.php` and `scripts/vercel_preflight.php`), all **9** Markdown docs (incl. `VERCEL_READINESS.md`) plus `README.md`, and `docs/design-preview.jpg` are present.
 - Includes `README.md`, `Caddyfile`, `Dockerfile`, `Dockerfile.vercel`, `.dockerignore`, `.gitignore`, `vercel.json`, `vercel.vercel-php.example.json`, all tests, `.env.example`, and both `storage/*/.gitkeep` placeholders.
 - Zero forbidden entries: no `.env`, `.env.*` other than `.env.example`, SQLite DB/WAL/SHM, `app.key`, logs, uploads, `__pycache__`, `.pyc`, archives, or local admin credential file.
+
+## 2026-11-26 cart / Buy-now bug-fix release
+
+A follow-up live report found the product-view Add to cart flow appearing stuck for ~10–15 seconds, Buy now landing on `/cart`, and guest `/account/wishlist` / `/account/reviews` returning 500. The whole route set was swept again and the following were fixed: repeated cross-region DB round trips, the Buy-now destination, variant-id handling, early account authentication, PostgreSQL-invalid review SQL, coupon-removal markup, newsletter error placement, CSRF auto-retry, request timeout and optimistic cart feedback. See `docs/BUGFIXES_2026-11-26.md`.
+
+Verification after these fixes:
+
+- `bash tests/run.sh`: 187 PHP syntax, 3 JS syntax, **15/0** new bug-fix static checks, 623 route/handler checks, 40 Vercel-readiness checks, **73/0 HTTP smoke checks** (including new guest-account redirect checks).
+- Real headless Chromium at 390×844 on a variant product: first variant preselected, cart badge 0→1 in ~260 ms, one success toast, 0 console/page errors. Buy now reached `/checkout`; coupon apply/remove and newsletter error placement worked; guest wishlist redirected to `/login?next=…`.
+- Clean `/home/user/allstore.zip`: 234 entries, 187 PHP files, integrity `ok`, `regions:["sin1"]`, no exact token literals or local secrets.
+
+These are **local** results. Promotion of this specific release to the existing Vercel production deployment is recorded in the workspace handoff separately; it is not implied by the local test run.

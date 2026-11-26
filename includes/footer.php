@@ -21,8 +21,8 @@ $flashes = Session::flashes();
         <?= Session::csrfField() ?>
         <input class="input" type="email" name="email" placeholder="Your email address" aria-label="Your email address" required maxlength="254">
         <button class="btn btn-primary" type="submit">Subscribe</button>
+        <div class="field-error" data-form-error></div>
       </form>
-      <div class="field-error" data-form-error style="margin-top:8px"></div>
     </div>
   </div>
 </section>

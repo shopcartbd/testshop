@@ -11,24 +11,54 @@ use AllStore\Core\AppException;
 /** Prices, stock, discounts, tax and totals are ALWAYS recomputed from the DB. */
 final class CartService
 {
+    /** Request-scope caches; remote PostgreSQL round trips are expensive. */
+    private static ?array $cartCache = null;
+    private static bool $cartLoaded = false;
+    private static array $itemsCache = [];
+
+    private static function invalidateItems(): void { self::$itemsCache = []; }
+
+    /** Forget cached rows after an external mutation (e.g. checkout). */
+    public static function invalidate(): void
+    {
+        self::$cartCache = null;
+        self::$cartLoaded = false;
+        self::$itemsCache = [];
+    }
+
+    private static function touchCart(array $fields = []): void
+    {
+        if (self::$cartCache === null) { self::invalidateItems(); return; }
+        $fields['updated_at'] = Helpers::now();
+        Database::update('carts', $fields, 'id=:i', ['i'=>self::$cartCache['id']]);
+        foreach ($fields as $k => $v) { self::$cartCache[$k] = $v; }
+        self::invalidateItems();
+    }
+
     public static function cart(bool $create = true): ?array
     {
+        if (self::$cartLoaded && (!$create || self::$cartCache !== null)) {
+            return self::$cartCache;
+        }
         $uid = Auth::id();
         $key = Session::id();
         $row = $uid
             ? Database::first("SELECT * FROM carts WHERE user_id=:u AND status='open' ORDER BY created_at ASC LIMIT 1", ['u'=>$uid])
             : Database::first("SELECT * FROM carts WHERE session_key=:s AND user_id IS NULL AND status='open' ORDER BY created_at ASC LIMIT 1", ['s'=>$key]);
         if (!$row && $create) {
-            $id = Helpers::uuid();
-            Database::insert('carts', ['id'=>$id,'session_key'=>$key,'user_id'=>$uid,
-                'status'=>'open','created_at'=>Helpers::now(),'updated_at'=>Helpers::now()]);
-            $row = Database::first('SELECT * FROM carts WHERE id=:i', ['i'=>$id]);
+            $now = Helpers::now();
+            $row = ['id'=>Helpers::uuid(),'session_key'=>$key,'user_id'=>$uid,'coupon_code'=>null,
+                'status'=>'open','created_at'=>$now,'updated_at'=>$now];
+            Database::insert('carts', $row);
         }
+        self::$cartCache = $row;
+        self::$cartLoaded = true;
         return $row;
     }
 
     public static function mergeGuestCart(string $userId): void
     {
+        self::invalidate();
         $guest = Database::first("SELECT * FROM carts WHERE session_key=:s AND user_id IS NULL AND status='open'", ['s'=>Session::id()]);
         if (!$guest) { return; }
         $mine = Database::first("SELECT * FROM carts WHERE user_id=:u AND status='open'", ['u'=>$userId]);
@@ -50,12 +80,15 @@ final class CartService
         }
         Database::delete('cart_items', 'cart_id=:c', ['c'=>$guest['id']]);
         Database::delete('carts', 'id=:i', ['i'=>$guest['id']]);
+        self::invalidate();
     }
 
     public static function items(bool $saved = false): array
     {
+        $cacheKey = $saved ? 'saved' : 'active';
+        if (array_key_exists($cacheKey, self::$itemsCache)) { return self::$itemsCache[$cacheKey]; }
         $cart = self::cart(false);
-        if (!$cart) { return []; }
+        if (!$cart) { return self::$itemsCache[$cacheKey] = []; }
         $rows = Database::all("SELECT ci.*, p.name, p.slug, p.sku, p.price_cents, p.compare_cents, p.stock,
             p.status AS product_status, p.weight_grams, p.tax_rate, p.return_eligible,
             v.name AS variant_name, v.sku AS variant_sku, v.price_cents AS variant_price, v.stock AS variant_stock, v.options AS variant_options,
@@ -82,7 +115,7 @@ final class CartService
                 'saved_for_later'=>(int)$r['saved_for_later'],
             ];
         }
-        return $out;
+        return self::$itemsCache[$cacheKey] = $out;
     }
 
     public static function count(): int
@@ -124,7 +157,7 @@ final class CartService
                 'variant_id'=>$variantId,'quantity'=>$newQty,'saved_for_later'=>0,
                 'created_at'=>Helpers::now(),'updated_at'=>Helpers::now()]);
         }
-        Database::update('carts', ['updated_at'=>Helpers::now()], 'id=:i', ['i'=>$cart['id']]);
+        self::touchCart();
         return ['count'=>self::count(), 'price_cents'=>$price];
     }
 
@@ -148,18 +181,21 @@ final class CartService
         }
         if ($qty > $stock) { throw new AppException('Only ' . $stock . ' units are available.', 409); }
         Database::update('cart_items', ['quantity'=>$qty,'updated_at'=>Helpers::now()], 'id=:i', ['i'=>$itemId]);
+        self::touchCart();
     }
 
     public static function remove(string $itemId): void
     {
         self::ownedItem($itemId);
         Database::delete('cart_items', 'id=:i', ['i'=>$itemId]);
+        self::touchCart();
     }
 
     public static function saveForLater(string $itemId, bool $save): void
     {
         self::ownedItem($itemId);
         Database::update('cart_items', ['saved_for_later'=>$save ? 1 : 0,'updated_at'=>Helpers::now()], 'id=:i', ['i'=>$itemId]);
+        self::touchCart();
     }
 
     public static function applyCoupon(string $code): array
@@ -170,14 +206,14 @@ final class CartService
             self::clearCoupon();
             throw new AppException($res['message'], 422);
         }
-        $cart = self::cart();
-        Database::update('carts', ['coupon_code'=>strtoupper(trim($code)),'updated_at'=>Helpers::now()], 'id=:i', ['i'=>$cart['id']]);
+        self::cart();
+        self::touchCart(['coupon_code'=>strtoupper(trim($code))]);
         return $res;
     }
     public static function clearCoupon(): void
     {
         $cart = self::cart(false);
-        if ($cart) { Database::update('carts', ['coupon_code'=>null,'updated_at'=>Helpers::now()], 'id=:i', ['i'=>$cart['id']]); }
+        if ($cart) { self::touchCart(['coupon_code'=>null]); }
     }
     public static function couponCode(): string
     {
@@ -223,7 +259,7 @@ final class CartService
         $cart = self::cart(false);
         if ($cart) {
             Database::delete('cart_items', 'cart_id=:c AND saved_for_later=0', ['c'=>$cart['id']]);
-            Database::update('carts', ['coupon_code'=>null,'status'=>'converted','updated_at'=>Helpers::now()], 'id=:i', ['i'=>$cart['id']]);
+            self::touchCart(['coupon_code'=>null,'status'=>'converted']);
         }
     }
 }

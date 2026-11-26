@@ -4,6 +4,9 @@ namespace AllStore\Core;
 
 final class Helpers
 {
+    /** Whole settings table, loaded once per request (was one query per key). */
+    private static ?array $settingsCache = null;
+
     public static function uuid(): string
     {
         $b = random_bytes(16);
@@ -63,16 +66,24 @@ final class Helpers
     public static function ticketNumber(): string { return 'TKT-' . gmdate('Ymd') . '-' . strtoupper(substr(self::token(4), 0, 6)); }
     public static function setting(string $key, string $default = ''): string
     {
-        static $cache = [];
-        if (array_key_exists($key, $cache)) { return $cache[$key]; }
-        try { $v = Database::value('SELECT value FROM settings WHERE key=:k', ['k' => $key]); }
-        catch (\Throwable) { $v = null; }
-        return $cache[$key] = ($v === null || $v === '') ? $default : (string)$v;
+        if (self::$settingsCache === null) {
+            self::$settingsCache = [];
+            try {
+                foreach (Database::all('SELECT key, value FROM settings') as $row) {
+                    self::$settingsCache[(string)$row['key']] = (string)($row['value'] ?? '');
+                }
+            } catch (\Throwable) {
+                self::$settingsCache = [];
+            }
+        }
+        $v = self::$settingsCache[$key] ?? null;
+        return ($v === null || $v === '') ? $default : (string)$v;
     }
     public static function setSetting(string $key, string $value, string $group = 'general'): void
     {
         Database::exec("INSERT INTO settings(key,value,group_name,updated_at) VALUES(:k,:v,:g,:t) ON CONFLICT(key) DO UPDATE SET value=:v2, group_name=:g2, updated_at=:t2",
             ['k'=>$key,'v'=>$value,'g'=>$group,'t'=>self::now(),'v2'=>$value,'g2'=>$group,'t2'=>self::now()]);
+        if (self::$settingsCache !== null) { self::$settingsCache[$key] = $value; }
     }
     public static function timeAgo(string $iso): string
     {

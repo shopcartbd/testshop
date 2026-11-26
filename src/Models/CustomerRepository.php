@@ -104,11 +104,15 @@ final class CustomerRepository
     }
     public static function eligibleReviews(string $userId): array
     {
-        return Database::all("SELECT DISTINCT oi.product_id, p.name, p.slug, o.order_number, oi.id AS order_item_id
+        // ROW_NUMBER() is portable across PostgreSQL and SQLite, unlike
+        // SELECT DISTINCT ... ORDER BY a column absent from the select list.
+        return Database::all("SELECT product_id, name, slug, order_number, order_item_id, placed_at FROM (
+            SELECT oi.product_id, p.name, p.slug, o.order_number, oi.id AS order_item_id, o.placed_at,
+                   ROW_NUMBER() OVER (PARTITION BY oi.product_id ORDER BY o.placed_at DESC, oi.id DESC) AS rn
             FROM order_items oi JOIN orders o ON o.id=oi.order_id JOIN products p ON p.id=oi.product_id
             WHERE o.user_id=:u AND o.status='delivered'
             AND NOT EXISTS (SELECT 1 FROM reviews r WHERE r.product_id=oi.product_id AND r.user_id=:u2)
-            ORDER BY o.placed_at DESC LIMIT 30", ['u'=>$userId,'u2'=>$userId]);
+        ) eligible WHERE rn=1 ORDER BY placed_at DESC LIMIT 30", ['u'=>$userId,'u2'=>$userId]);
     }
     public static function couponsForUser(string $userId): array
     {

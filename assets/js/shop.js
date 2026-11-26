@@ -92,7 +92,7 @@
       if (btn.classList.contains('disabled')) return;
       qsa('[data-variant]').forEach(x => x.classList.remove('active'));
       btn.classList.add('active');
-      if (variantHidden) variantHidden.value = btn.dataset.variant || '';
+      if (variantHidden) variantHidden.value = btn.dataset.variantId || '';
       const price = qs('[data-pdp-price]'); if (price) price.textContent = money(btn.dataset.price);
       const old = qs('[data-pdp-compare]'); if (old && btn.dataset.compare) old.textContent = money(btn.dataset.compare);
       const sku = qs('[data-pdp-sku]'); if (sku) sku.textContent = btn.dataset.sku || '';
@@ -102,11 +102,18 @@
         stock.textContent = n > 0 ? 'In stock (' + n + ' available)' : 'Out of stock';
         stock.className = n > 0 ? 'text-success' : 'text-danger';
       }
-      const add = qs('[data-add-to-cart]'); if (add) add.disabled = parseInt(btn.dataset.stock || '0', 10) <= 0;
+      const addButtons = qsa('.pdp-actions [data-add-to-cart]');
+      addButtons.forEach(a => { a.disabled = parseInt(btn.dataset.stock || '0', 10) <= 0; });
       const img = btn.dataset.image; if (img && main) main.querySelector('img').src = img;
-      qsa('[data-add-to-cart]').forEach(a => { a.dataset.variantId = btn.dataset.variant || ''; });
+      addButtons.forEach(a => { a.dataset.variantId = btn.dataset.variantId || ''; });
     });
   });
+  // Preselect the first available option so Add to cart never sends an empty
+  // variant id on a variant product when the shopper taps immediately.
+  const firstAvailableVariant = qsa('[data-variant]:not(.disabled)')[0];
+  if (firstAvailableVariant && variantHidden && variantHidden.value === '') {
+    firstAvailableVariant.click();
+  }
 
   /* ------------------------------------------------------------- PDP tabs */
   qsa('[data-tab]').forEach(btn => {

@@ -85,7 +85,7 @@ require APP_ROOT . '/includes/header.php';
     </div>
     <div class="pdp-actions">
       <button type="button" class="btn btn-primary btn-lg" data-add-to-cart="<?= Helpers::e($p['id']) ?>" <?= (int)$p['stock'] <= 0 ? 'disabled' : '' ?>><?= icon('cart',18) ?> Add to cart</button>
-      <button type="button" class="btn btn-dark btn-lg" data-add-to-cart="<?= Helpers::e($p['id']) ?>" data-go-to-cart="1" <?= (int)$p['stock'] <= 0 ? 'disabled' : '' ?>>Buy now</button>
+      <button type="button" class="btn btn-dark btn-lg" data-add-to-cart="<?= Helpers::e($p['id']) ?>" data-buy-now="1" <?= (int)$p['stock'] <= 0 ? 'disabled' : '' ?>>Buy now</button>
       <button type="button" class="btn btn-outline btn-lg" data-wishlist="<?= Helpers::e($p['id']) ?>" aria-label="Save to wishlist" style="flex:0 0 50px;padding:0" ><?= icon('heart',18) ?></button>
       <button type="button" class="btn btn-outline btn-lg" data-compare="<?= Helpers::e($p['id']) ?>" data-compare-name="<?= Helpers::e($p['name']) ?>" aria-label="Add to compare" style="flex:0 0 50px;padding:0"><?= icon('sliders',18) ?></button>
     </div>

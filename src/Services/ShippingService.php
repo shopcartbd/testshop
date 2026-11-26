@@ -8,9 +8,13 @@ use AllStore\Core\Helpers;
 /** Zone + weight + order-value based shipping. All costs come from the DB. */
 final class ShippingService
 {
+    private static array $ratesCache = [];
+
     public static function rates(string $country, int $weightGrams, int $subtotalCents): array
     {
         $country = strtoupper(substr(preg_replace('/[^A-Za-z\*]/', '', $country), 0, 3));
+        $cacheKey = $country . '|' . $weightGrams . '|' . $subtotalCents;
+        if (isset(self::$ratesCache[$cacheKey])) { return self::$ratesCache[$cacheKey]; }
         $rows = Database::all("SELECT sr.*, sz.countries, sz.regions, sz.cities, sz.name AS zone_name
             FROM shipping_rates sr JOIN shipping_zones sz ON sz.id=sr.zone_id
             WHERE sr.is_active=1 AND sz.is_active=1 ORDER BY sr.cost_cents ASC, sr.id ASC");
@@ -38,7 +42,7 @@ final class ShippingService
                 'cost_cents'=>$fallback,'free'=>$fallback === 0,'eta_min'=>3,'eta_max'=>7,
                 'estimate'=>gmdate('M j', time()+3*86400) . ' – ' . gmdate('M j', time()+7*86400)];
         }
-        return $out;
+        return self::$ratesCache[$cacheKey] = $out;
     }
     public static function pick(string $method, string $country, int $weightGrams, int $subtotalCents, bool $freeShipping = false): array
     {

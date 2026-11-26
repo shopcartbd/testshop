@@ -20,8 +20,23 @@
         opts.body = new URLSearchParams(new FormData(options.form));
         opts.headers['Content-Type'] = 'application/x-www-form-urlencoded';
       }
+      let timer = null, controller = null;
+      if (options.timeout > 0 && typeof AbortController !== 'undefined') {
+        controller = new AbortController();
+        opts.signal = controller.signal;
+        timer = setTimeout(() => controller.abort(), options.timeout);
+      }
       let res;
-      try { res = await fetch(path, opts); } catch (_) { throw new Error('Network error. Please check your connection.'); }
+      try {
+        res = await fetch(path, opts);
+      } catch (_) {
+        if (controller && controller.signal.aborted) {
+          throw new Error('This is taking longer than expected. Please try again.');
+        }
+        throw new Error('Network error. Please check your connection.');
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
       let json;
       try { json = await res.json(); } catch (_) { throw new Error('Unexpected server response.'); }
       if (json.csrf_token) {
@@ -32,11 +47,19 @@
       if (!res.ok || !json.success) {
         const err = new Error(json.message || 'Request failed.');
         err.errors = json.errors || [];
+        err.status = res.status;
+        // A 419 happens before the write. The response carries the fresh token,
+        // so retry exactly once instead of forcing the shopper to reload.
+        if (res.status === 419 && !options.csrfRetried) {
+          return AS.request(path, Object.assign({}, options, { csrfRetried: true }));
+        }
         throw err;
       }
       return json;
     },
-    post(path, data) { return this.request(path, { method: 'POST', data }); },
+    post(path, data, options = {}) {
+      return this.request(path, Object.assign({ method: 'POST', data }, options));
+    },
     toast(type, message) {
       const stack = document.getElementById('toastStack');
       if (!stack) return;
@@ -47,6 +70,7 @@
       el.querySelector('span').textContent = message;
       stack.appendChild(el);
       setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateY(8px)'; setTimeout(() => el.remove(), 250); }, 4200);
+      return el;
     },
     setCounts(data) {
       if (!data) return;
@@ -63,6 +87,14 @@
         });
       }
     },
+    adjustCartCount(delta) {
+      document.querySelectorAll('[data-cart-count]').forEach(el => {
+        const current = parseInt(el.textContent, 10) || 0;
+        const next = Math.max(0, current + delta);
+        el.textContent = next;
+        el.dataset.zero = next > 0 ? '0' : '1';
+      });
+    },
   };
   window.AllStore = AS;
 
@@ -72,24 +104,59 @@
   /* --------------------------------------------------------------- add to cart */
   document.addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-add-to-cart]');
-    if (!btn) return;
+    if (!btn || btn.disabled) return;
     e.preventDefault();
-    if (btn.disabled) return;
-    const original = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span>Adding…</span>';
-    try {
-      const qty = parseInt(btn.dataset.qty || document.querySelector('[data-pdp-qty]')?.value || '1', 10);
-      const json = await AS.post('/api/cart/add', {
-        product_id: btn.dataset.productId || btn.dataset.addToCart,
-        variant_id: btn.dataset.variantId || document.querySelector('[data-pdp-variant]')?.value || '',
-        quantity: Math.max(1, Math.min(99, qty || 1)),
+    const qty = Math.max(1, Math.min(99,
+      parseInt(btn.dataset.qty || document.querySelector('[data-pdp-qty]')?.value || '1', 10) || 1));
+    const productId = btn.dataset.productId || btn.dataset.addToCart;
+    if (!productId) { AS.toast('error', 'Choose a product.'); return; }
+    const variantId = btn.dataset.variantId || document.querySelector('[data-pdp-variant]')?.value || '';
+    const scope = btn.closest('.pdp-actions');
+    const buttons = Array.from((scope || btn.parentElement || document).querySelectorAll('[data-add-to-cart]'));
+    if (!buttons.includes(btn)) buttons.unshift(btn);
+    const snapshots = buttons.map(b => ({ el: b, disabled: b.disabled, html: b.innerHTML, busy: b.getAttribute('aria-busy') }));
+    const restore = () => {
+      if (restore.done) return;
+      restore.done = true;
+      snapshots.forEach(s => {
+        s.el.disabled = s.disabled;
+        s.el.innerHTML = s.html;
+        if (s.busy === null) s.el.removeAttribute('aria-busy'); else s.el.setAttribute('aria-busy', s.busy);
       });
+    };
+    buttons.forEach(b => { b.disabled = true; });
+    btn.innerHTML = '<span>Adding…</span>';
+    btn.setAttribute('aria-busy', 'true');
+    // Optimistic feedback: the header count changes immediately, then the
+    // authoritative server count replaces it. Any failure rolls it back.
+    AS.adjustCartCount(qty);
+    const progressToast = AS.toast('info', 'Saving to your cart…');
+    let succeeded = false;
+    try {
+      const json = await AS.post('/api/cart/add', {
+        product_id: productId,
+        variant_id: variantId,
+        quantity: qty,
+      }, { timeout: 30000 });
+      succeeded = true;
+      if (progressToast) progressToast.remove();
       AS.setCounts(json.data);
       AS.toast('success', json.message || 'Added to your cart.');
-      if (btn.dataset.goToCart === '1') { window.location.href = '/cart'; }
-    } catch (err) { AS.toast('error', err.message); }
-    finally { btn.disabled = false; btn.innerHTML = original; }
+      btn.innerHTML = '<span>Added ✓</span>';
+      if (btn.dataset.buyNow === '1' || btn.dataset.goToCart === '1') {
+        restore();
+        window.location.href = '/checkout';
+        return;
+      }
+      setTimeout(restore, 900);
+    } catch (err) {
+      if (progressToast) progressToast.remove();
+      AS.adjustCartCount(-qty);
+      AS.toast('error', err.message);
+      restore();
+    } finally {
+      if (!succeeded) restore();
+    }
   });
 
   /* ---------------------------------------------------------------- wishlist */
@@ -168,6 +235,26 @@
       const box = form.querySelector('[data-form-error]');
       if (box) box.textContent = err.message;
     } finally { if (btn) btn.disabled = false; }
+  });
+
+  /* ------------------------------------------------- link-style ajax actions */
+  // Some compact controls (e.g. "remove coupon") are anchors rather than forms.
+  document.addEventListener('click', async (e) => {
+    const el = e.target.closest('a[data-ajax-form], button[data-ajax-form]');
+    if (!el || el.tagName === 'FORM' || el.closest('form[data-ajax-form]')) return;
+    e.preventDefault();
+    const data = {};
+    if (el.dataset.ajaxRemove) data.remove = Number(el.dataset.ajaxRemove);
+    if (el.dataset.ajaxPayload) {
+      try { Object.assign(data, JSON.parse(el.dataset.ajaxPayload)); } catch (_) {}
+    }
+    el.setAttribute('aria-busy', 'true');
+    try {
+      const json = await AS.post(el.dataset.ajaxForm, data, { timeout: 20000 });
+      AS.toast('success', json.message);
+      if (el.dataset.reload !== '0') setTimeout(() => window.location.reload(), 350);
+    } catch (err) { AS.toast('error', err.message); }
+    finally { el.removeAttribute('aria-busy'); }
   });
 
   /* ------------------------------------------------------------ confirmation modal */

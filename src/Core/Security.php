@@ -45,16 +45,21 @@ final class Security
     {
         $bucket = substr(preg_replace('/[^a-zA-Z0-9:._\-]/', '', $bucket), 0, 180);
         $now = time();
+        $windowStart = gmdate('c', $now);
+        $cutoff = gmdate('c', $now - $windowSeconds);
+        $stamp = Helpers::now();
         try {
-            $row = Database::first('SELECT hits, window_start FROM rate_limits WHERE bucket=:b', ['b' => $bucket]);
-            if (!$row || (strtotime((string)$row['window_start']) ?: 0) <= $now - $windowSeconds) {
-                Database::exec("INSERT INTO rate_limits(bucket,hits,window_start,updated_at) VALUES(:b,1,:w,:t) ON CONFLICT(bucket) DO UPDATE SET hits=1, window_start=:w2, updated_at=:t2",
-                    ['b'=>$bucket,'w'=>gmdate('c',$now),'t'=>Helpers::now(),'w2'=>gmdate('c',$now),'t2'=>Helpers::now()]);
-                $hits = 1;
-            } else {
-                Database::exec('UPDATE rate_limits SET hits=hits+1, updated_at=:t WHERE bucket=:b', ['t'=>Helpers::now(),'b'=>$bucket]);
-                $hits = (int)$row['hits'] + 1;
-            }
+            // Atomic read-modify-write in one round trip. Both PostgreSQL and
+            // SQLite support INSERT ... ON CONFLICT ... RETURNING.
+            $row = Database::first("INSERT INTO rate_limits(bucket,hits,window_start,updated_at)
+                VALUES(:b,1,:w,:t)
+                ON CONFLICT(bucket) DO UPDATE SET
+                  hits = CASE WHEN rate_limits.window_start <= :cutoff THEN 1 ELSE rate_limits.hits + 1 END,
+                  window_start = CASE WHEN rate_limits.window_start <= :cutoff THEN :w2 ELSE rate_limits.window_start END,
+                  updated_at = :t2
+                RETURNING hits",
+                ['b'=>$bucket,'w'=>$windowStart,'t'=>$stamp,'cutoff'=>$cutoff,'w2'=>$windowStart,'t2'=>$stamp]);
+            $hits = (int)($row['hits'] ?? 1);
             if ($hits > $max) { Logger::log('warning', 'rate.limit.exceeded', ['bucket'=>$bucket]); return false; }
             return true;
         } catch (\Throwable $e) {

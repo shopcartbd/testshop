@@ -234,6 +234,12 @@ expect("Search suggest API", suggest, (200,), api_ok(suggest))
 cart0 = call("GET", "/api/cart", csrf_mode="none")
 expect("Empty cart API", cart0, (200,), api_ok(cart0))
 
+# Account pages must redirect guests before running any account DB query.
+for guest_path in ("/account/wishlist", "/account/reviews"):
+    guest_page = call("GET", guest_path, csrf_mode="none", allow_redirect=False, accept="text/html")
+    expect("Guest " + guest_path + " redirects to login", guest_page, (301, 302),
+           "/login?next=" in (guest_page.headers.get("Location") or ""))
+
 bad_csrf = call("POST", "/api/cart/add", {"product_id": product, "quantity": 1}, csrf_mode="none")
 expect("Missing CSRF rejected", bad_csrf, (419,), isinstance(bad_csrf.json_data, dict) and bad_csrf.json_data.get("success") is False)
 bad_method = call("GET", "/api/cart/add", csrf_mode="none")

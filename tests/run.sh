@@ -16,6 +16,9 @@ echo "== JavaScript syntax =="
 for f in assets/js/*.js; do node --check "$f"; done
 echo "node --check passed for $(find assets/js -maxdepth 1 -name '*.js' | wc -l) JS files"
 
+echo "== Bug-fix regression checks =="
+python3 tests/validate_bugfixes.py
+
 echo "== Python test syntax =="
 python3 -m py_compile tests/smoke.py
 echo "python3 -m py_compile passed"
