@@ -15,10 +15,12 @@
   const region = $('region');
   let hierarchy = null;
   let hierarchyPromise = null;
+  // Keep any value already chosen in server-rendered HTML while the async
+  // hierarchy loads; otherwise an early user selection would be lost.
   const selected = {
-    division: division.dataset.selected || '',
-    district: district.dataset.selected || '',
-    area: area.dataset.selected || '',
+    division: division.dataset.selected || division.value || '',
+    district: district.dataset.selected || district.value || '',
+    area: area.dataset.selected || area.value || '',
   };
 
   const option = (value, label) => {
@@ -87,9 +89,10 @@
     updateAreas(preferred ? '' : selected.area);
   };
   const populate = () => {
-    fill(division, divisions(), 'Select division / বিভাগ', selected.division || '');
+    const currentDivision = division.value || selected.division || '';
+    fill(division, divisions(), 'Select division / বিভাগ', currentDivision);
     selected.division = '';
-    updateDistricts();
+    updateDistricts(); // respects the division chosen before /api/locations loaded
     division.required = district.required = area.required = country.value === 'BD';
   };
   const applyCountry = (initial) => {

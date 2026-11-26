@@ -105,4 +105,4 @@ Verification after these changes:
 - Headless Chromium: **8/8** checks; add-to-cart, BD cascade auto-fill, live rates, shipping methods, admin order media, exact custom selections, **0 console/page errors**. Screenshots are outside the source ZIP at `/home/user/checkout_bd_local.png` and `/home/user/admin_order_media_local.png`.
 - Final clean `/home/user/allstore.zip`: approximately **1.42 MB**, **244 entries**, **192 PHP**, **11 Markdown docs**, integrity `ok`, forbidden entries `0`, `regions:["sin1"]`, no `.env`/SQLite/local admin credential/exact token literal.
 
-These are **local-source** results. This feature release has not yet been promoted to GitHub/Vercel in this workspace state; see `/home/user/FEATURE_RELEASE_REPORT_BN.md` for the explicit local/live/pending status.
+These are **local-source** results; the local test run does not itself verify live deployment. Live GitHub/Vercel promotion and REST/browser verification are recorded separately in `/home/user/FEATURE_DEPLOY_RESULT.md` and `/home/user/FEATURE_RELEASE_REPORT_BN.md`.

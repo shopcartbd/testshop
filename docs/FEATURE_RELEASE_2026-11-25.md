@@ -1,6 +1,6 @@
 # Feature release — ordered product media, all product kinds and Bangladesh checkout
 
-**Status:** implemented and verified locally on 2026-11-25. This document describes the source bundle only. Promotion of this specific feature release to GitHub/Vercel is recorded separately in `/home/user/FEATURE_RELEASE_REPORT_BN.md` and is **not** implied by the local tests.
+**Status:** implemented and verified locally on 2026-11-25, then promoted to the existing Vercel production project. This document describes the source bundle and local verification; live GitHub/Vercel deployment details are recorded separately in `/home/user/FEATURE_DEPLOY_RESULT.md` and `/home/user/FEATURE_RELEASE_REPORT_BN.md`.
 
 ## Why no new SQL migration was needed
 
@@ -94,4 +94,4 @@ Updated: checkout, cart, product page, order confirmation, customer order detail
 - A local runtime script verified **35/35** checks: public hierarchy API, rate API, invalid area rejection, admin division/district/thana CRUD + reset, product form, custom fields → cart → BD checkout → admin image/CSV/download, digital-only checkout, account address book, missing-area rejection and private digital upload.
 - Headless Chromium **8/8** checks: add-to-cart, BD cascade auto-fill, live rate response, shipping method selection, admin order media, exact custom selections, and zero console/page errors. Screenshots: `/home/user/checkout_bd_local.png`, `/home/user/admin_order_media_local.png`.
 
-These are local-source results. Live GitHub/Vercel promotion, live Supabase Storage signed URLs, real payment webhooks and full device QA remain outside this local verification.
+These are local-source results. Live GitHub/Vercel promotion and REST/browser verification are recorded in the workspace handoff; live Supabase Storage signed URLs, real payment webhooks and full device QA remain outside this local verification.
