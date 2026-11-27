@@ -124,6 +124,34 @@ check("Zero discount is not shown as a negative amount", "discount_cents'] ?? 0)
 check("Product view has professional styling and delivery summary", all(s in product_page for s in ["product.css", "pdp-shell", "pdp-delivery-card", "DeliveryZoneService::publicSummary"]) and (ROOT / "assets/css/product.css").is_file() and (ROOT / "assets/css/checkout.css").is_file())
 check("Home grids are compact and the PDP purchase panel is enlarged", "grid-template-columns: repeat(4, minmax(0,1fr))" in read("assets/css/app.css") and "minmax(420px, .98fr)" in read("assets/css/product.css") and "min-height: 58px" in read("assets/css/product.css") and "Ships from our main warehouse" not in product_page)
 
+simple_checkout = read("pages/checkout-simple-bd.php")
+check("Simple BD checkout shows visible division before district, thana and address",
+      'data-simple-bd="1"' in simple_checkout
+      and 'id="division_id" name="division_id" data-selected' in simple_checkout
+      and 'id="division_id" name="division_id" data-selected="..." hidden' not in simple_checkout
+      and 'type="email"' not in simple_checkout
+      and simple_checkout.index('Division / বিভাগ') < simple_checkout.index('District / জেলা')
+      < simple_checkout.index('Thana / Upazila') < simple_checkout.index('Full address'))
+check("BD cascade uses the visible division-first flow for simple checkout too",
+      "fillDistrictsSimple" not in bd_js and "populateSimple" not in bd_js
+      and "captureSelection" in bd_js and "findDistrictAny" in bd_js
+      and "division.required = district.required = area.required = required" in bd_js)
+
+checkout_gallery_js = read("assets/js/product-gallery.js")
+check("Admin product form accepts multiple gallery image uploads",
+      all(x in product_form for x in ['name="gallery_files[]"', 'multiple', "array_slice($images, 0, 12)", "UploadService::store($file)"])
+      and 'id="image_file"' not in product_form)
+check("PDP gallery has a large image, thumbnails below and a PDP-only switcher",
+      all(x in product_page for x in ['data-pdp-main', 'data-pdp-thumbs', 'data-pdp-thumb', 'product-gallery.js'])
+      and 'data-gallery-thumb' not in product_page
+      and (ROOT / "assets/js/product-gallery.js").is_file()
+      and all(x in checkout_gallery_js for x in ['[data-pdp-main]', '[data-pdp-thumb]', 'img.src = url']))
+check("PDP gallery CSS is scoped to the product page only",
+      "grid-template-columns: 1fr" in read("assets/css/product.css")
+      and ".pdp-gallery-wrap .gallery-thumbs" in read("assets/css/product.css")
+      and "repeat(4, minmax(0,1fr))" in read("assets/css/app.css")
+      and "data-pdp-thumb" not in read("assets/js/shop.js") and "data-pdp-main" not in read("assets/js/shop.js"))
+
 # No exact token literal may enter this release either.
 token_re = re.compile(rb"(?:ghp_[A-Za-z0-9]{20,}|vcp_[A-Za-z0-9]{20,})")
 token_hits = []

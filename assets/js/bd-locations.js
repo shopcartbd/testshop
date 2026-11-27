@@ -1,10 +1,11 @@
 /* AllStore :: reusable Bangladesh division / district / upazila-thana cascade.
-   Used by checkout and the customer address book. Other pages can listen for
-   the `bd-location-change` event to react (checkout refreshes shipping rates).
+   Used by checkout and the customer address book. Division is a visible first
+   step, followed by district and thana/upazila. Other pages can listen for the
+   `bd-location-change` event to react (checkout refreshes shipping rates).
 
-   With data-simple-bd="1" the division selector is hidden and the district
-   selector lists every district; the division is derived from the chosen
-   district on the client and revalidated on the server. */
+   A cold production start can repopulate selectors after an early choice; the
+   selected values are captured and restored. A district/area pair submitted
+   without a division (older saved addresses) is resolved to its division. */
 (() => {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -17,13 +18,11 @@
   const block = $('bdLocationFields');
   const city = $('city');
   const region = $('region');
-  const simple = !!(block && block.dataset.simpleBd === '1');
   const needsShipping = () => !block || block.dataset.needsShipping !== '0';
   let hierarchy = null;
   let hierarchyPromise = null;
   // Keep any value already chosen in server-rendered HTML, or selected by the
-  // customer before /api/locations finishes loading. A cold production start
-  // can otherwise repopulate the selectors and silently drop that selection.
+  // customer before /api/locations finishes loading.
   const selected = {
     division: division.dataset.selected || division.value || '',
     district: district.dataset.selected || district.value || '',
@@ -35,10 +34,10 @@
     selected.area = area.value || '';
   };
 
-  const option = (value, label) => {
+  const option = (value, text) => {
     const o = document.createElement('option');
     o.value = value;
-    o.textContent = label;
+    o.textContent = text;
     return o;
   };
   const label = (row) => row.name + (row.en && row.en !== row.name ? ' · ' + row.en : '');
@@ -108,81 +107,54 @@
     updateAreas(preferred ? '' : selected.area);
   };
   const populate = () => {
-    const currentDivision = division.value || selected.division || '';
     const currentDistrict = selected.district || district.value || '';
     const currentArea = selected.area || area.value || '';
+    let currentDivision = division.value || selected.division || '';
+    if (!currentDivision && currentDistrict) {
+      const [d] = findDistrictAny(currentDistrict);
+      if (d) currentDivision = d.id;
+    }
     fill(division, divisions(), 'Select division / বিভাগ', currentDivision);
     selected.division = '';
     selected.district = currentDistrict;
     selected.area = currentArea;
     updateDistricts();
-    division.required = district.required = area.required = country.value === 'BD';
-  };
-
-  // Simplified BD checkout: all districts in one selector, no visible division.
-  const fillDistrictsSimple = (preferred) => {
-    district.textContent = '';
-    district.appendChild(option('', 'Select district / জেলা'));
-    for (const d of divisions()) {
-      for (const x of (d.districts || [])) {
-        const o = document.createElement('option');
-        o.value = x.id;
-        o.textContent = (x.name || x.en || '') + (x.en && x.en !== x.name ? ' · ' + x.en : '') + ' — ' + (d.name || d.en || '');
-        district.appendChild(o);
-      }
-    }
-    district.value = preferred || selected.district || '';
-  };
-  const updateAreasSimple = (preferred) => {
-    const [d, x] = findDistrictAny(district.value);
-    division.value = d ? d.id : '';
-    fill(area, x ? x.areas || [] : [], 'Select thana / থানা', preferred || selected.area || '');
-    selected.area = '';
-    autoFill(true);
-  };
-  const populateSimple = () => {
-    const currentDivision = selected.division || division.value || '';
-    const currentDistrict = selected.district || district.value || '';
-    const currentArea = selected.area || area.value || '';
-    fill(division, divisions(), 'Select division', currentDivision);
-    selected.division = '';
-    fillDistrictsSimple(currentDistrict);
-    selected.district = '';
-    updateAreasSimple(currentArea);
-    division.required = false;
-    district.required = area.required = country.value === 'BD' && needsShipping();
+    const required = country.value === 'BD' && needsShipping();
+    division.required = district.required = area.required = required;
   };
 
   const applyCountry = (initial) => {
     const isBd = country.value === 'BD';
-    if (block) block.hidden = !isBd || !needsShipping();
-    division.disabled = !isBd;
-    district.disabled = area.disabled = !isBd || !needsShipping();
+    const active = isBd && needsShipping();
+    if (block) block.hidden = !active;
+    division.disabled = district.disabled = area.disabled = !active;
     division.required = district.required = area.required = false;
     if (!isBd) {
       division.value = district.value = area.value = '';
-      if (simple) { fillDistrictsSimple(''); } else { fill(district, [], 'Select district / জেলা', ''); }
+      fill(district, [], 'Select district / জেলা', '');
       fill(area, [], 'Select upazila / থানা', '');
       changed();
       return;
     }
     load().then(() => {
       if (!initial) { selected.division = selected.district = selected.area = ''; }
-      if (simple) { populateSimple(); } else { populate(); }
+      populate();
       changed();
     });
   };
 
-  if (simple) {
-    country.addEventListener('change', () => applyCountry(false));
-    district.addEventListener('change', () => { captureSelection(); updateAreasSimple(); changed(); });
-    area.addEventListener('change', () => { captureSelection(); autoFill(true); changed(); });
-  } else {
-    country.addEventListener('change', () => applyCountry(false));
-    division.addEventListener('change', () => { captureSelection(); updateDistricts(); changed(); });
-    district.addEventListener('change', () => { captureSelection(); updateAreas(); changed(); });
-    area.addEventListener('change', () => { captureSelection(); autoFill(true); changed(); });
-  }
+  // Before /api/locations resolves, keep the early selection and wait for the
+  // hierarchy instead of clearing the dependent selects with an empty lookup.
+  const earlyChange = () => {
+    captureSelection();
+    if (hierarchy) return false;
+    load().then(() => { populate(); changed(); });
+    return true;
+  };
+  country.addEventListener('change', () => applyCountry(false));
+  division.addEventListener('change', () => { if (!earlyChange()) { updateDistricts(); changed(); } });
+  district.addEventListener('change', () => { if (!earlyChange()) { updateAreas(); changed(); } });
+  area.addEventListener('change', () => { if (!earlyChange()) { autoFill(true); changed(); } });
   if (city) city.addEventListener('input', () => { delete city.dataset.bdAuto; });
   if (region) region.addEventListener('input', () => { delete region.dataset.bdAuto; });
   captureSelection();

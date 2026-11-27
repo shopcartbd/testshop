@@ -106,7 +106,7 @@ final class CheckoutService
         if ($needsShipping && mb_strlen($line1) < 4) { $errors['line1'] = 'Street address is required.'; }
         if ($needsShipping && mb_strlen($city) < 2 && $location['area'] === '') { $errors['city'] = 'City or delivery area is required.'; }
         if ($needsShipping && $country === 'BD' && $location['area_id'] === '') {
-            $errors['area_id'] = $simpleBd ? 'Select district and thana for delivery.' : 'Select your division, district and upazila/thana for delivery.';
+            $errors['area_id'] = $simpleBd ? 'Select your division, district and thana for delivery.' : 'Select your division, district and upazila/thana for delivery.';
         }
         if ($errors) { throw new AppException('Please correct the highlighted fields.', 422, $errors); }
         if (!PaymentService::isAvailable($method)) { throw new AppException('The selected payment method is unavailable.', 422); }

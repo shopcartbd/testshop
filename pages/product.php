@@ -47,10 +47,10 @@ require APP_ROOT . '/includes/header.php';
 <div class="container"><div class="pdp-shell"><div class="pdp-layout">
   <div class="pdp-gallery-wrap">
     <div class="gallery">
-      <div class="gallery-thumbs">
-        <?php foreach ($images as $i=>$im): ?><button type="button" data-gallery-thumb="<?= Helpers::e($im['url']) ?>" data-alt="<?= Helpers::e($im['alt'] ?? $p['name']) ?>" class="<?= $i===0?'active':'' ?>" aria-label="View image <?= $i+1 ?>"><img src="<?= Helpers::e($im['url']) ?>" alt="" loading="lazy"></button><?php endforeach; ?>
+      <div class="gallery-main" data-pdp-main><span class="pdp-gallery-badge"><?= icon('check-circle',13) ?> Quality checked</span><img src="<?= Helpers::e($images[0]['url']) ?>" alt="<?= Helpers::e($images[0]['alt'] ?? $p['name']) ?>" itemprop="image" id="pdpMainImage"></div>
+      <div class="gallery-thumbs" data-pdp-thumbs role="group" aria-label="Product images">
+        <?php foreach ($images as $i=>$im): ?><button type="button" data-pdp-thumb="<?= Helpers::e($im['url']) ?>" data-pdp-alt="<?= Helpers::e($im['alt'] ?? $p['name']) ?>" class="<?= $i===0?'active':'' ?>" aria-label="View image <?= $i+1 ?>" aria-pressed="<?= $i===0?'true':'false' ?>"><img src="<?= Helpers::e($im['url']) ?>" alt="" loading="lazy"></button><?php endforeach; ?>
       </div>
-      <div class="gallery-main" data-gallery-main><span class="pdp-gallery-badge"><?= icon('check-circle',13) ?> Quality checked</span><img src="<?= Helpers::e($images[0]['url']) ?>" alt="<?= Helpers::e($p['name']) ?>" itemprop="image" id="pdpMainImage"></div>
     </div>
     <?php if (!empty($p['video_url'])): ?><div style="margin-top:var(--sp-4)"><video controls style="width:100%;border-radius:var(--radius)" src="<?= Helpers::e($p['video_url']) ?>"></video></div><?php endif; ?>
   </div>
@@ -185,4 +185,5 @@ require APP_ROOT . '/includes/header.php';
 <?php endif; ?>
 </section>
 <div id="compareBar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:85;background:var(--c-ink);color:#fff;padding:12px 20px"><div class="container row-between"><span id="compareText">Compare products</span><a class="btn btn-sm btn-outline" style="border-color:#fff;color:#fff" href="/shop">Continue shopping</a></div></div>
+echo '<script src="/assets/js/product-gallery.js" defer></script>';
 <?php require APP_ROOT . '/includes/footer.php';

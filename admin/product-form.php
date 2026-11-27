@@ -38,10 +38,30 @@ if (Request::isPost()) {
         $in['spec'] = is_array($spec) ? $spec : [];
         $images = preg_split('/\r\n|\r|\n/', Request::str('gallery_urls','',20000)) ?: [];
         $images = array_values(array_filter(array_map('trim',$images), static fn($u)=>$u!==''));
-        $upload = $_FILES['image_file'] ?? null;
-        if (is_array($upload) && (int)($upload['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) { array_unshift($images, UploadService::store($upload)); }
+        // Multiple files chosen in the admin gallery picker become the first
+        // images; the first uploaded file is the main product image.
+        $uploaded = [];
+        $multi = $_FILES['gallery_files'] ?? null;
+        if (is_array($multi) && isset($multi['name']) && is_array($multi['name'])) {
+            foreach (array_keys($multi['name']) as $i) {
+                $file = [
+                    'name'=>(string)($multi['name'][$i] ?? ''),
+                    'type'=>(string)($multi['type'][$i] ?? ''),
+                    'tmp_name'=>(string)($multi['tmp_name'][$i] ?? ''),
+                    'error'=>(int)($multi['error'][$i] ?? UPLOAD_ERR_NO_FILE),
+                    'size'=>(int)($multi['size'][$i] ?? 0),
+                ];
+                if ($file['error'] === UPLOAD_ERR_OK) { $uploaded[] = UploadService::store($file); }
+            }
+        }
+        // Backward compatibility for the old single-image field.
+        $legacy = $_FILES['image_file'] ?? null;
+        if (is_array($legacy) && (int)($legacy['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+            array_unshift($uploaded, UploadService::store($legacy));
+        }
+        $images = array_values(array_merge($uploaded, $images));
         foreach ($images as $k=>$u) { if (!preg_match('#^(/assets/|/storage/uploads/[A-Za-z0-9/_\.\-]+|https://)#',$u)) { unset($images[$k]); } }
-        $in['images'] = array_values($images);
+        $in['images'] = array_values(array_slice($images, 0, 12));
         $saved = CatalogRepository::saveProduct($in, $id !== '' ? $id : null);
         Logger::audit($id!==''?'admin.product.updated':'admin.product.created','products',$saved);
         Session::flash('success','Product saved.');
@@ -108,8 +128,13 @@ echo '<div class="field"><label for="dimensions">Dimensions</label><input class=
 echo '<div class="field"><label for="warranty">Warranty</label><input class="input" id="warranty" name="warranty" value="'.$v('warranty').'"></div>';
 echo '<div class="field"><label for="supplier_name">Supplier</label><input class="input" id="supplier_name" name="supplier_name" value="'.$v('supplier_name').'"></div>';
 echo '<div class="field"><label for="video_url">Video URL (https)</label><input class="input" type="url" id="video_url" name="video_url" value="'.$v('video_url').'"></div>';
-echo '<div class="field span-2"><label for="gallery_urls">Gallery URLs (one per line)</label><textarea class="textarea" id="gallery_urls" name="gallery_urls" style="min-height:80px">'.Helpers::e(implode("\n",$gallery)).'</textarea></div>';
-echo '<div class="field span-2"><label for="image_file">Upload an image and add it to the gallery</label><input class="input" type="file" id="image_file" name="image_file" accept="image/jpeg,image/png,image/webp,image/gif"><span class="field-hint">JPEG, PNG, WebP or GIF · max 5 MB</span></div>';
+echo '<div class="field span-2"><label for="gallery_urls">Gallery URLs (optional, one per line)</label><textarea class="textarea" id="gallery_urls" name="gallery_urls" style="min-height:80px">'.Helpers::e(implode("\n",$gallery)).'</textarea><span class="field-hint">Existing gallery URLs stay here. You can also upload several images at once below.</span></div>';
+echo '<div class="field span-2"><label for="gallery_files">Upload product images (select multiple)</label><input class="input" type="file" id="gallery_files" name="gallery_files[]" multiple accept="image/jpeg,image/png,image/webp,image/gif"><span class="field-hint">JPEG, PNG, WebP or GIF · up to 12 images · 5 MB each · first selected image becomes the main image.</span></div>';
+if ($gallery !== []) {
+    echo '<div class="field span-2"><label>Current gallery</label><div style="display:flex;flex-wrap:wrap;gap:8px">';
+    foreach ($gallery as $g) { echo '<img src="'.Helpers::e($g).'" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--c-border)">'; }
+    echo '</div></div>';
+}
 echo '<div class="field span-2"><label for="seo_title">SEO title</label><input class="input" id="seo_title" name="seo_title" value="'.$v('seo_title').'"></div>';
 echo '<div class="field span-2"><label for="seo_description">SEO description</label><textarea class="textarea" id="seo_description" name="seo_description">'.$v('seo_description').'</textarea></div>';
 echo '</div></div></div>';

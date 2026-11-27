@@ -80,3 +80,27 @@
   .trust-row { grid-template-columns: 1fr; }
   .pdp-price { flex-wrap: wrap; }
 }
+
+
+/* PDP-only gallery: large image with thumbnails underneath. */
+.pdp-gallery-wrap .gallery {
+  grid-template-columns: 1fr;
+  gap: var(--sp-3);
+}
+.pdp-gallery-wrap .gallery-main { order: 1; width: 100%; }
+.pdp-gallery-wrap .gallery-thumbs {
+  order: 2;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 9px;
+  overflow: visible;
+}
+.pdp-gallery-wrap .gallery-thumbs button {
+  width: 74px;
+  height: 74px;
+  flex: 0 0 74px;
+}
+@media (max-width: 620px) {
+  .pdp-gallery-wrap .gallery-thumbs { gap: 8px; }
+  .pdp-gallery-wrap .gallery-thumbs button { width: 62px; height: 62px; flex-basis: 62px; }
+}

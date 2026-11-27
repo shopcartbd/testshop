@@ -24,21 +24,24 @@ $divisionSelected = (string)($old['division_id'] ?? ($default['division_id'] ?? 
   <div class="step-head"><span class="step-num">2</span><h3>Delivery area</h3></div>
   <div id="checkoutDeliveryZone" class="delivery-zone-note"<?= $zoneLabel !== '' ? '' : ' hidden' ?>><?= Helpers::e($zoneLabel !== '' ? ($zoneCost !== '' ? $zoneLabel.' · '.$zoneCost : $zoneLabel) : '') ?></div>
   <select class="select" id="country" name="country" hidden><option value="BD" selected>Bangladesh</option></select>
-  <select class="select" id="division_id" name="division_id" data-selected="<?= Helpers::e($divisionSelected) ?>" hidden>
-    <option value="">Select division</option>
-    <?php foreach ($bd['divisions'] as $d): ?>
-    <option value="<?= Helpers::e($d['id']) ?>"><?= Helpers::e($d['name']) ?></option>
-    <?php endforeach; ?>
-  </select>
   <input type="hidden" id="city" name="city" value="">
   <input type="hidden" id="region" name="region" value="">
   <div class="form-grid">
+    <div class="field">
+      <label for="division_id">Division / বিভাগ *</label>
+      <select class="select" id="division_id" name="division_id" data-selected="<?= Helpers::e($divisionSelected) ?>"<?= $needsShipping ? ' required' : '' ?>>
+        <option value="">Select division</option>
+        <?php foreach ($bd['divisions'] as $d): ?>
+        <option value="<?= Helpers::e($d['id']) ?>"><?= Helpers::e($d['name']) ?></option>
+        <?php endforeach; ?>
+      </select>
+    </div>
     <div class="field">
       <label for="district_id">District / জেলা *</label>
       <select class="select" id="district_id" name="district_id" data-selected="<?= Helpers::e($districtSelected) ?>"<?= $needsShipping ? ' required' : '' ?>>
         <option value="">Select district</option>
         <?php foreach ($bd['divisions'] as $d): foreach ($d['districts'] as $x): ?>
-        <option value="<?= Helpers::e($x['id']) ?>"><?= Helpers::e($x['name']) ?><?= $x['en'] !== '' ? ' · '.Helpers::e($x['en']) : '' ?> — <?= Helpers::e($d['name']) ?></option>
+        <option value="<?= Helpers::e($x['id']) ?>" data-division="<?= Helpers::e($d['id']) ?>"><?= Helpers::e($x['name']) ?><?= $x['en'] !== '' ? ' · '.Helpers::e($x['en']) : '' ?></option>
         <?php endforeach; endforeach; ?>
       </select>
     </div>

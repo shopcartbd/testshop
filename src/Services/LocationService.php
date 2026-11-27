@@ -180,8 +180,8 @@ final class LocationService
         if ($country !== 'BD') { return $empty; }
         $ids = array_filter([$divisionId,$districtId,$areaId], static fn($v)=>$v !== '');
         if ($ids === []) { return $empty; }
-        // Simplified BD checkout posts district/area only; derive the division
-        // from the district so the same structured address and zone logic work.
+        // Older simplified BD submissions or saved addresses can arrive with
+        // district/area but no division; resolve it before validation.
         if ($divisionId === '' && $districtId !== '' && $areaId !== '') {
             foreach (self::publicData()['divisions'] as $d) {
                 foreach ($d['districts'] ?? [] as $x) {
