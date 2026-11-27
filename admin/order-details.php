@@ -18,6 +18,8 @@ $number = Request::str('number','',80);
 $order = $number !== '' ? OrderRepository::findByNumber($number) : null;
 if (!$order) { http_response_code(404); throw new AppException('Order not found.',404); }
 $items = OrderRepository::items((string)$order['id']);
+$statusChoices = OrderRepository::statusChoices((string)$order['status']);
+$isCodOrder = strtolower((string)($order['payment_method'] ?? '')) === 'cod';
 if (Request::str('download_item','',80) !== '') {
     OrderMediaService::downloadOrderItem((string)$order['id'], Request::str('download_item','',80), $number);
 }
@@ -34,17 +36,19 @@ if (Request::isPost()) {
         $action = Request::str('action','',30);
         if ($action === 'status') {
             $status = Request::str('status','',30);
-            if (!in_array($status,OrderRepository::STATUSES,true)) throw new AppException('Invalid status.',422);
+            if (!in_array($status,$statusChoices,true)) throw new AppException('Choose a valid next status for this order.',422);
             OrderRepository::updateStatus((string)$order['id'],$status,Request::str('note','',500),Auth::id());
-            Session::flash('success','Order status updated.');
+            Session::flash('success', ($isCodOrder && $status === 'confirmed' && (string)$order['payment_status'] !== 'paid')
+                ? 'COD order confirmed without marking payment paid.'
+                : 'Order status updated.');
         } elseif ($action === 'payment') {
             $ps = Request::str('payment_status','',20);
-            if (!in_array($ps,['pending','paid','failed','refunded','cod_pending'],true)) throw new AppException('Invalid payment status.',422);
+            if (!in_array($ps,OrderRepository::PAYMENT_STATUSES,true)) throw new AppException('Invalid payment status.',422);
             Database::tx(static function() use ($order,$ps): void {
                 Database::update('orders',['payment_status'=>$ps,'updated_at'=>Helpers::now()],'id=:i',['i'=>$order['id']]);
-                Database::update('payments',['status'=>$ps==='paid'?'paid':$ps,'updated_at'=>Helpers::now()],'order_id=:o',['o'=>$order['id']]);
+                Database::update('payments',['status'=>$ps,'updated_at'=>Helpers::now()],'order_id=:o',['o'=>$order['id']]);
             });
-            Logger::audit('order.payment_confirmed','orders',(string)$order['id'],['status'=>$ps]); Session::flash('success','Payment status updated.');
+            Logger::audit('order.payment_status_updated','orders',(string)$order['id'],['status'=>$ps]); Session::flash('success','Payment status updated.');
         } elseif ($action === 'shipment') {
             $tracking = trim(Request::str('tracking_number','',100));
             $courier = Request::id('courier_id'); $est = trim(Request::str('estimated_delivery','',30));
@@ -139,12 +143,19 @@ if ($zoneInfo) {
 echo '</div>';
 echo '<details class="address-copy-details"><summary>Courier copy</summary><pre class="address-copy-preview">'.Helpers::e($copyText).'</pre></details></div>';
 if ($order['customer_note']) echo '<div class="alert alert-info" style="margin-top:12px">'.icon('message',16).'<span>'.Helpers::e($order['customer_note']).'</span></div>';
-echo '<hr><h4 style="margin-bottom:10px">Status transition</h4><form method="post">'.Session::csrfField().'<input type="hidden" name="action" value="status"><div class="form-grid"><div class="field"><label>New status</label><select class="select" name="status">';
-foreach (OrderRepository::STATUSES as $s) echo '<option value="'.$s.'" '.(($order['status']===$s)?'selected':'').'>'.Helpers::e(ucwords(str_replace('_',' ',$s))).'</option>';
-echo '</select></div><div class="field"><label>Note</label><input class="input" name="note" maxlength="500"></div></div><button class="btn btn-primary btn-sm" type="submit">Update status</button></form></div></div>';
-echo '<div class="admin-grid-2" style="margin-top:16px"><div class="card card-pad"><h3 style="margin-bottom:12px">Payment & shipment</h3><form method="post">'.Session::csrfField().'<input type="hidden" name="action" value="payment"><div class="row"><select class="select" name="payment_status">';
-foreach (['pending','paid','failed','refunded','cod_pending'] as $s) echo '<option value="'.$s.'" '.(($order['payment_status']===$s)?'selected':'').'>'.Helpers::e(ucwords(str_replace('_',' ',$s))).'</option>';
-echo '</select><button class="btn btn-outline btn-sm" type="submit">Confirm payment</button></div></form>';
+$statusHint = $isCodOrder
+    ? 'COD orders can be confirmed while payment is Pending. Mark Paid only after cash is collected. / COD অর্ডার পেমেন্ট Pending থাকতেই Confirmed করা যাবে; নগদ সংগ্রহের আগে Paid করবেন না।'
+    : 'Only valid next statuses are shown. Payment status is separate from order status. / শুধু বৈধ পরবর্তী status দেখানো হয়; পেমেন্ট status আলাদা।';
+echo '<hr><h4 style="margin-bottom:10px">Status transition / COD confirmation</h4><form method="post">'.Session::csrfField().'<input type="hidden" name="action" value="status"><div class="form-grid"><div class="field"><label>New status</label><select class="select" name="status">';
+foreach ($statusChoices as $s) {
+    $label = ucwords(str_replace('_',' ',$s));
+    if ($isCodOrder && $s === 'confirmed' && $order['status'] === 'pending') { $label .= ' — confirm COD order'; }
+    echo '<option value="'.$s.'" '.(($order['status']===$s)?'selected':'').'>'.Helpers::e($label).'</option>';
+}
+echo '</select></div><div class="field"><label>Note</label><input class="input" name="note" maxlength="500"></div></div><button class="btn btn-primary btn-sm" type="submit">Update status</button><p class="field-hint" style="margin-top:8px">'.Helpers::e($statusHint).'</p></form></div></div>';
+echo '<div class="admin-grid-2" style="margin-top:16px"><div class="card card-pad"><h3 style="margin-bottom:12px">Payment status & shipment</h3><form method="post">'.Session::csrfField().'<input type="hidden" name="action" value="payment"><div class="row"><select class="select" name="payment_status">';
+foreach (OrderRepository::PAYMENT_STATUSES as $s) echo '<option value="'.$s.'" '.(($order['payment_status']===$s)?'selected':'').'>'.Helpers::e(ucwords(str_replace('_',' ',$s))).'</option>';
+echo '</select><button class="btn btn-outline btn-sm" type="submit">Update payment status</button></div><p class="field-hint" style="margin-top:8px">Use Status transition above to confirm a COD order; this form only changes payment status.</p></form>';
 echo '<form method="post">'.Session::csrfField().'<input type="hidden" name="action" value="shipment"><div class="form-grid"><div class="field"><label>Courier</label><select class="select" name="courier_id"><option value="">— None —</option>';
 foreach ($couriers as $c) echo '<option value="'.Helpers::e($c['id']).'" '.((($shipment['courier_id'] ?? '')===$c['id'])?'selected':'').'>'.Helpers::e($c['name']).'</option>';
 echo '</select></div><div class="field"><label>Tracking number</label><input class="input" name="tracking_number" value="'.Helpers::e($shipment['tracking_number'] ?? '').'" maxlength="100"></div><div class="field"><label>Estimated delivery</label><input class="input" type="date" name="estimated_delivery" value="'.Helpers::e(substr((string)($shipment['estimated_delivery'] ?? ''),0,10)).'"></div><div class="field"><label>Shipment status</label><select class="select" name="shipment_status">';

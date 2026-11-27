@@ -145,7 +145,7 @@ final class Helpers
         $status = (string)($order['status'] ?? '');
         $payment = (string)($order['payment_status'] ?? '');
         if (in_array($status, ['cancelled','refunded','returned'], true)) { return false; }
-        return in_array($payment, ['paid','authorized','cod_pending','partially_refunded'], true)
+        return in_array($payment, ['paid','authorized','partially_refunded'], true)
             || in_array($status, ['confirmed','processing','packed','shipped','delivered'], true);
     }
 

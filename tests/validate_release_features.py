@@ -152,6 +152,49 @@ check("PDP gallery CSS is scoped to the product page only",
       and "repeat(4, minmax(0,1fr))" in read("assets/css/app.css")
       and "data-pdp-thumb" not in read("assets/js/shop.js") and "data-pdp-main" not in read("assets/js/shop.js"))
 
+# COD confirmation must never require payment_status=paid. 2026-11-27 audit.
+order_repo = read("src/Models/OrderRepository.php")
+update_start = order_repo.index("public static function updateStatus")
+update_end = order_repo.index("private static function restoreStock", update_start)
+update_body = order_repo[update_start:update_end]
+check(
+    "COD order status transitions are independent of payment status",
+    "public const PAYMENT_STATUSES = ['pending','authorized','paid','failed','refunded','partially_refunded']" in order_repo
+    and "cod_pending" not in order_repo
+    and "public const TRANSITIONS" in order_repo
+    and "'pending'=>['confirmed','processing','cancelled']" in order_repo
+    and "statusChoices(" in order_repo
+    and "isTransitionAllowed(" in order_repo
+    and "never gate this on paid" in update_body
+    and "payment_status" not in update_body,
+)
+check(
+    "Admin order page confirms COD before payment and shows only valid next statuses",
+    all(x in order_admin for x in [
+        "OrderRepository::statusChoices", "OrderRepository::PAYMENT_STATUSES",
+        "COD orders can be confirmed while payment is Pending",
+        "confirm COD order", "Update payment status",
+        "Status transition / COD confirmation",
+    ])
+    and "foreach (OrderRepository::STATUSES as $s)" not in order_admin
+    and "cod_pending" not in order_admin
+    and "Confirm payment" not in order_admin,
+)
+check(
+    "Admin payments choices match the DB CHECK constraint",
+    all(x in read("admin/payments.php") for x in ["'authorized'=>'Authorized'", "'partially_refunded'=>'Partially Refunded'"])
+    and "cod_pending" not in read("admin/payments.php"),
+)
+check(
+    "Digital download helper no longer references invalid cod_pending",
+    "cod_pending" not in helpers,
+)
+check(
+    "Standalone admin status API has no payment gate",
+    "OrderRepository::updateStatus" in read("api/handlers/admin-order-status.php")
+    and "payment_status" not in read("api/handlers/admin-order-status.php"),
+)
+
 # No exact token literal may enter this release either.
 token_re = re.compile(rb"(?:ghp_[A-Za-z0-9]{20,}|vcp_[A-Za-z0-9]{20,})")
 token_hits = []

@@ -10,7 +10,7 @@ admin_crud_page([
   'order_id'=>['label'=>'Order','type'=>'reference','choices_sql'=>'SELECT id,order_number AS name FROM orders ORDER BY placed_at DESC LIMIT 300','empty_label'=>'Choose an order'],
   'provider'=>['label'=>'Provider','type'=>'select','choices'=>['cod'=>'Cash on Delivery','stripe'=>'Stripe','manual'=>'Manual']],
   'method'=>['label'=>'Method','type'=>'text','max'=>40],
-  'status'=>['label'=>'Status','type'=>'select','choices'=>['pending'=>'Pending','paid'=>'Paid','failed'=>'Failed','refunded'=>'Refunded']],
+  'status'=>['label'=>'Status','type'=>'select','choices'=>['pending'=>'Pending','authorized'=>'Authorized','paid'=>'Paid','failed'=>'Failed','refunded'=>'Refunded','partially_refunded'=>'Partially Refunded']],
   'amount_cents'=>['label'=>'Amount','type'=>'money','default'=>0],
   'currency'=>['label'=>'Currency','type'=>'text','max'=>3,'default'=>'USD'],
   'transaction_ref'=>['label'=>'Provider reference','type'=>'text','max'=>180],

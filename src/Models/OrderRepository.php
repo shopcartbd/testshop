@@ -13,6 +13,8 @@ use AllStore\Services\UploadService;
 final class OrderRepository
 {
     public const STATUSES = ['pending','confirmed','processing','packed','shipped','delivered','cancelled','return_requested','returned','refunded'];
+    /** Values allowed by the orders payment-status CHECK constraint; the legacy COD pending label is not a DB value. */
+    public const PAYMENT_STATUSES = ['pending','authorized','paid','failed','refunded','partially_refunded'];
 
     public static function forUser(string $userId, array $f = []): array
     {
@@ -123,7 +125,8 @@ final class OrderRepository
         return ['items'=>$items,'total'=>$total,'page'=>$page,'pages'=>max(1,(int)ceil($total/$per))];
     }
 
-    private const TRANSITIONS = [
+    /** Order workflow is independent of payment_status: COD orders are confirmed before cash is collected. */
+    public const TRANSITIONS = [
         'pending'=>['confirmed','processing','cancelled'],
         'confirmed'=>['processing','packed','cancelled'],
         'processing'=>['packed','shipped','cancelled'],
@@ -135,12 +138,30 @@ final class OrderRepository
         'refunded'=>[], 'cancelled'=>[],
     ];
 
+    /** Status choices shown to admins: current status plus its valid next steps. */
+    public static function allowedTransitions(string $currentStatus): array
+    {
+        return self::TRANSITIONS[$currentStatus] ?? [];
+    }
+
+    public static function statusChoices(string $currentStatus): array
+    {
+        return array_values(array_unique(array_merge([$currentStatus], self::allowedTransitions($currentStatus))));
+    }
+
+    public static function isTransitionAllowed(string $currentStatus, string $newStatus): bool
+    {
+        if ($currentStatus === $newStatus) { return true; }
+        return in_array($newStatus, self::allowedTransitions($currentStatus), true);
+    }
+
     public static function updateStatus(string $orderId, string $newStatus, string $note = '', ?string $actorId = null): void
     {
         if (!in_array($newStatus, self::STATUSES, true)) { throw new AppException('Invalid order status.', 422); }
         $o = Database::first('SELECT * FROM orders WHERE id=:i', ['i'=>$orderId]);
         if (!$o) { throw new AppException('Order not found.', 404); }
-        if ($o['status'] !== $newStatus && !in_array($newStatus, self::TRANSITIONS[$o['status']] ?? [], true)) {
+        // COD confirmation must work while payment remains pending; never gate this on paid.
+        if (!self::isTransitionAllowed((string)$o['status'], $newStatus)) {
             throw new AppException('That status change is not allowed.', 422);
         }
         Database::tx(function () use ($o, $newStatus, $note, $actorId): void {
