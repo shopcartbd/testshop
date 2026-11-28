@@ -141,7 +141,7 @@ echo '</div><aside class="cart-summary card card-pad checkout-summary"><h3>Your 
 foreach ($totals['items'] as $it) {
     $img = Helpers::safeMediaUrl((string)($it['image_url'] ?? ''));
     if ($img === '') { $img = '/assets/img/products/headphones.jpg'; }
-    $details = Helpers::orderItemDetails((array)($it['options'] ?? []));
+    $details = Helpers::orderItemDetails((array)($it['options'] ?? []), (string)($it['variant_name'] ?? ''));
     echo '<div class="checkout-item"><img src="'.Helpers::e($img).'" alt=""><div><div class="cell-strong">'.Helpers::e($it['name']).'</div><div class="text-subtle">Qty '.$it['quantity'].(!empty($it['variant_name'])?' · '.Helpers::e($it['variant_name']):'').'</div>';
     foreach ($details['options'] as $option) { echo '<div class="text-subtle">'.Helpers::e($option['label']).': '.Helpers::e($option['value']).'</div>'; }
     echo '</div><strong>'.Helpers::money($it['line_total_cents']).'</strong></div>';

@@ -103,8 +103,9 @@ final class Helpers
     }
 
     /** Snapshot details stored with an order/cart item: options, bundle and delivery file. */
-    public static function orderItemDetails(array $options): array
+    public static function orderItemDetails(array $options, ?string $skipVariant = null): array
     {
+        $skipValue = $skipVariant !== null ? trim($skipVariant) : null;
         $display = []; $download = ''; $bundle = []; $kind = '';
         foreach ($options as $key => $value) {
             $key = (string)$key;
@@ -121,6 +122,7 @@ final class Helpers
                 $label = self::optionLabel($key);
                 $text = self::optionText($value);
             }
+            if ($skipValue !== null && $skipValue !== '' && mb_strtolower($text) === mb_strtolower($skipValue)) { continue; }
             if ($text !== '') { $display[] = ['label'=>$label !== '' ? $label : 'Option','value'=>$text]; }
         }
         return [

@@ -152,6 +152,8 @@
         variant_id: variantId,
         quantity: qty,
         custom_options: customOptions,
+        // Product pages only: keep the gallery picture the shopper is looking at.
+        image_url: document.querySelector('#pdpMainImage')?.getAttribute('src') || '',
       }, { timeout: 30000 });
       succeeded = true;
       if (progressToast) progressToast.remove();

@@ -508,6 +508,192 @@ final class CatalogRepository
         }
     }
 
+    /** Normalise a free-text size list ("S, M, L, XL") into clean labels. */
+    public static function parseSizeLabels(string $raw): array
+    {
+        $parts = preg_split('#[,;\r\n|/]+#', $raw) ?: [];
+        $out = [];
+        foreach ($parts as $part) {
+            $label = trim(preg_replace('/\s+/', ' ', (string)$part) ?? '');
+            $label = trim($label, " -–—");
+            if ($label === '' || mb_strlen($label) > 24) { continue; }
+            $label = preg_replace('/[\x00-\x1F]/u', '', $label) ?? $label;
+            if ($label === '') { continue; }
+            $key = mb_strtolower($label);
+            if (isset($out[$key])) { continue; }
+            $out[$key] = $label;
+            if (count($out) >= 20) { break; }
+        }
+        return array_values($out);
+    }
+
+    /** Size variants created by the admin "sizes" field (never manual variants). */
+    public static function sizeVariants(string $productId): array
+    {
+        $rows = Database::all("SELECT * FROM product_variants WHERE product_id=:p AND is_active=1", ['p'=>$productId]);
+        $out = [];
+        foreach ($rows as $row) {
+            $opts = (array)Helpers::decode((string)($row['options'] ?? '{}'), []);
+            if ((string)($opts['__managed'] ?? '') !== 'size') { continue; }
+            $row['__order'] = (int)($opts['__order'] ?? 999);
+            $out[] = $row;
+        }
+        usort($out, static fn(array $a, array $b): int => [$a['__order'], (string)$a['name']] <=> [$b['__order'], (string)$b['name']]);
+        return $out;
+    }
+
+    /**
+     * Create/update/remove the size variants for a product from one text field.
+     * Existing sizes keep their own price, stock and image; a size removed from
+     * the field is deleted.
+     *
+     * @return array{created:int,kept:int,removed:int,labels:array<int,string>}
+     */
+    public static function syncSizeVariants(string $productId, string $raw): array
+    {
+        $labels = self::parseSizeLabels($raw);
+        $product = Database::first('SELECT id, sku, name, price_cents, compare_cents, stock FROM products WHERE id=:i', ['i'=>$productId]);
+        if (!$product) { return ['created'=>0,'kept'=>0,'removed'=>0,'labels'=>[]]; }
+        $existing = self::sizeVariants($productId);
+        $byLabel = [];
+        foreach ($existing as $row) {
+            $opts = (array)Helpers::decode((string)($row['options'] ?? '{}'), []);
+            $byLabel[mb_strtolower((string)($opts['Size'] ?? $row['name']))] = $row;
+        }
+        $keep = [];
+        $created = 0; $kept = 0;
+        foreach ($labels as $index => $label) {
+            $key = mb_strtolower($label);
+            $row = $byLabel[$key] ?? null;
+            if ($row) {
+                $keep[] = (string)$row['id'];
+                // Keep the merchant's order and label casing in step with the field.
+                Database::update('product_variants', [
+                    'name'=>$label,
+                    'options'=>Helpers::json(['Size'=>$label, '__managed'=>'size', '__order'=>$index]),
+                    'updated_at'=>Helpers::now(),
+                ], 'id=:i', ['i'=>$row['id']]);
+                $kept++;
+                continue;
+            }
+            $sku = self::uniqueVariantSku((string)$product['sku'], $label);
+            $id = Helpers::uuid();
+            Database::insert('product_variants', [
+                'id'=>$id, 'product_id'=>$productId, 'sku'=>$sku, 'barcode'=>'',
+                'name'=>$label,
+                'options'=>Helpers::json(['Size'=>$label, '__managed'=>'size', '__order'=>$index]),
+                'price_cents'=>(int)$product['price_cents'],
+                'compare_cents'=>(int)$product['compare_cents'],
+                'stock'=>(int)$product['stock'],
+                'image_url'=>'', 'is_active'=>1,
+                'created_at'=>Helpers::now(), 'updated_at'=>Helpers::now(),
+            ]);
+            $wh = Database::first('SELECT id FROM warehouses WHERE is_default=1') ?: Database::first('SELECT id FROM warehouses LIMIT 1');
+            if ($wh) {
+                Database::insert('inventory', ['id'=>Helpers::uuid(),'product_id'=>$productId,'variant_id'=>$id,
+                    'warehouse_id'=>$wh['id'],'quantity'=>(int)$product['stock'],'available'=>(int)$product['stock'],
+                    'updated_at'=>Helpers::now()]);
+            }
+            $keep[] = $id;
+            $created++;
+        }
+        $removed = 0;
+        foreach ($existing as $row) {
+            foreach ($keep as $id) { if ($id === (string)$row['id']) { continue 2; } }
+            Database::delete('product_variants', 'id=:i AND product_id=:p', ['i'=>$row['id'],'p'=>$productId]);
+            Database::delete('inventory', 'variant_id=:v', ['v'=>$row['id']]);
+            $removed++;
+        }
+        // A product with sizes is a variable product; without sizes it is simple.
+        $type = (string)Database::value('SELECT product_type FROM products WHERE id=:i', ['i'=>$productId]);
+        if ($labels !== [] && $type === 'simple') {
+            Database::update('products', ['product_type'=>'variable','updated_at'=>Helpers::now()], 'id=:i', ['i'=>$productId]);
+        }
+        if ($labels === [] && $type === 'variable') {
+            Database::update('products', ['product_type'=>'simple','updated_at'=>Helpers::now()], 'id=:i', ['i'=>$productId]);
+        }
+        return ['created'=>$created,'kept'=>$kept,'removed'=>$removed,'labels'=>$labels];
+    }
+
+    /** SKU for a size variant, e.g. TS-1001-M, kept unique across the catalog. */
+    private static function uniqueVariantSku(string $productSku, string $label): string
+    {
+        $suffix = strtoupper(preg_replace('/[^A-Za-z0-9]+/', '', $label) ?? '');
+        if ($suffix === '') { $suffix = strtoupper(substr(Helpers::token(4), 0, 4)); }
+        $base = $productSku . '-' . mb_substr($suffix, 0, 8);
+        $sku = $base;
+        $n = 1;
+        while (Database::first('SELECT id FROM product_variants WHERE sku=:s', ['s'=>$sku])) {
+            $n++;
+            $sku = $base . '-' . $n;
+            if ($n > 50) { $sku = $base . '-' . strtoupper(substr(Helpers::token(4), 0, 4)); break; }
+        }
+        return $sku;
+    }
+
+    /**
+     * Active variants in the order a shopper should see them: sizes keep the
+     * merchant's order (S, M, L, XL), every other variant stays alphabetical.
+     */
+    public static function variantsForDisplay(string $productId): array
+    {
+        $variants = self::variants($productId);
+        $order = [];
+        foreach (self::sizeVariants($productId) as $row) { $order[(string)$row['id']] = (int)$row['__order']; }
+        if ($order === []) { return $variants; }
+        usort($variants, static function (array $a, array $b) use ($order): int {
+            $oa = $order[(string)$a['id']] ?? 999;
+            $ob = $order[(string)$b['id']] ?? 999;
+            return $oa === $ob ? strcmp((string)$a['name'], (string)$b['name']) : $oa <=> $ob;
+        });
+        return $variants;
+    }
+
+    /** Value for the admin "sizes" field: managed sizes, else a legacy size spec. */
+    public static function sizeFieldValue(string $productId): string
+    {
+        $labels = [];
+        foreach (self::sizeVariants($productId) as $row) {
+            $opts = (array)Helpers::decode((string)($row['options'] ?? '{}'), []);
+            $labels[] = (string)($opts['Size'] ?? $row['name']);
+        }
+        if ($labels !== []) { return implode(', ', $labels); }
+        $legacy = Database::value("SELECT pav.value_text FROM product_attribute_values pav
+            JOIN attributes a ON a.id = pav.attribute_id
+            WHERE pav.product_id=:p AND a.slug='size' LIMIT 1", ['p'=>$productId]);
+        $text = trim((string)($legacy ?? ''));
+        if ($text === '' || !preg_match('#[,/]#', $text)) { return ''; }
+        return implode(', ', self::parseSizeLabels($text));
+    }
+
+    /** Label for the PDP option group: "Size" when the options are sizes. */
+    public static function variantGroupLabel(array $variants): string
+    {
+        $keys = [];
+        foreach ($variants as $variant) {
+            $opts = (array)Helpers::decode((string)($variant['options'] ?? '{}'), []);
+            foreach (array_keys($opts) as $key) {
+                if (str_starts_with((string)$key, '__')) { continue; }
+                $keys[mb_strtolower((string)$key)] = (string)$key;
+            }
+        }
+        if (count($keys) === 1) {
+            $key = (string)array_key_first($keys);
+            if ($key === 'size') { return 'Size'; }
+            if ($key === 'color' || $key === 'colour') { return 'Colour'; }
+            if ($key !== 'variant') { return ucfirst($key); }
+        }
+        // Fall back to the labels themselves ("S", "M", "XL" → sizes).
+        $sizeLike = true;
+        foreach ($variants as $variant) {
+            if (preg_match('/^(x{0,3}s|s|m|l|x{0,2}l|\d{2,3}|\d{1,2}\s?(y|yr|years?))$/i', trim((string)$variant['name'])) !== 1) {
+                $sizeLike = false;
+                break;
+            }
+        }
+        return $sizeLike ? 'Size' : 'Choose an option';
+    }
+
     public static function saveProduct(array $in, ?string $id = null): string
     {
         $name = trim((string)($in['name'] ?? ''));
@@ -595,6 +781,9 @@ final class CatalogRepository
             self::saveSystemMeta($id, $slug, (string)$metaInput[$field]);
         }
         if (array_key_exists('spec', $in)) { self::saveProductSpecs($id, $in['spec']); }
+        // Simple "S, M, L, XL" sizes become real variant rows, so the storefront
+        // can show a size chooser and the order keeps the chosen size.
+        if (array_key_exists('sizes', $in)) { self::syncSizeVariants($id, (string)$in['sizes']); }
         return $id;
     }
     public static function duplicateProduct(string $id): string

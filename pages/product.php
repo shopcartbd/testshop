@@ -17,7 +17,9 @@ $userKey = Auth::id() ?: Session::id();
 CatalogRepository::recordView((string)$p['id'], $userKey);
 $images = CatalogRepository::images((string)$p['id']);
 if ($images === []) { $images = [['url'=>$p['image_url'] ?: '/assets/img/products/headphones.jpg','alt'=>$p['name']]]; }
-$variants = CatalogRepository::variants((string)$p['id']);
+$variants = CatalogRepository::variantsForDisplay((string)$p['id']);
+$variantLabel = $variants !== [] ? CatalogRepository::variantGroupLabel($variants) : '';
+$variantIsSize = $variantLabel === 'Size';
 $attrs = CatalogRepository::productAttributes((string)$p['id']);
 $meta = CatalogRepository::productMeta((string)$p['id']);
 $reviews = CatalogRepository::reviews((string)$p['id'], 12);
@@ -68,20 +70,28 @@ require APP_ROOT . '/includes/header.php';
       <?php if ($off > 0): ?><span class="was" data-pdp-compare><?= Helpers::money((int)$p['compare_cents']) ?></span><span class="badge badge-danger">-<?= $off ?>%</span><?php endif; ?>
       <link itemprop="availability" href="<?= (int)$p['stock'] > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock' ?>">
     </div>
-    <p class="pdp-short text-muted"><?= Helpers::e($p['short_description']) ?></p>
+    <?php if (trim((string)($p['short_description'] ?? '')) !== ''): ?><p class="pdp-short text-muted"><?= Helpers::e($p['short_description']) ?></p><?php endif; ?>
     <div class="pdp-block">
       <div class="pdp-stock-card"><strong data-pdp-stock class="<?= (int)$p['stock'] > 0 ? 'text-success' : 'text-danger' ?>"><?= (int)$p['is_digital'] === 1 ? 'Digital delivery — unlimited availability' : ((int)$p['stock'] > 0 ? 'In stock ('.(int)$p['stock'].' available)' : 'Out of stock') ?></strong></div>
     </div>
     <?php if ($variants !== []): ?>
-    <div class="pdp-block"><h4>Choose an option</h4>
-      <div class="variant-options">
-        <?php foreach ($variants as $v): ?>
-        <button type="button" class="variant-option <?= (int)$v['stock'] <= 0 ? 'disabled' : '' ?>" data-variant data-variant-id="<?= Helpers::e($v['id']) ?>"
-          data-price="<?= (int)$v['price_cents'] ?>" data-compare="<?= (int)$v['compare_cents'] ?>" data-sku="<?= Helpers::e($v['sku']) ?>"
-          data-stock="<?= (int)$v['stock'] ?>" data-image="<?= Helpers::e($v['image_url'] ?: $p['image_url']) ?>"><?= Helpers::e($v['name']) ?></button>
+    <div class="pdp-block pdp-options" data-option-group="variant" data-option-label="<?= Helpers::e($variantLabel) ?>" data-option-required="1">
+      <div class="pdp-option-head">
+        <h4><?= Helpers::e($variantLabel) ?> <span class="pdp-required" aria-hidden="true">*</span></h4>
+        <span class="pdp-option-pick" data-option-summary>Select<?= $variantIsSize ? ' a size' : ' an option' ?></span>
+      </div>
+      <div class="variant-options" role="radiogroup" aria-label="<?= Helpers::e($variantLabel) ?>" data-option-chips>
+        <?php foreach ($variants as $v): $vStock = (int)$v['stock']; ?>
+        <button type="button" class="variant-option<?= $vStock <= 0 ? ' is-sold-out' : '' ?>" role="radio" aria-checked="false" tabindex="0"
+          data-option data-option-chip="variant" data-option-value="<?= Helpers::e($v['id']) ?>" data-option-name="<?= Helpers::e($v['name']) ?>"
+          data-variant-id="<?= Helpers::e($v['id']) ?>"
+          data-price="<?= (int)$v['price_cents'] ?>" data-option-compare="<?= (int)$v['compare_cents'] ?>" data-sku="<?= Helpers::e($v['sku']) ?>"
+          data-stock="<?= $vStock ?>" data-image="<?= Helpers::e($v['image_url'] ?: '') ?>"
+          <?= $vStock <= 0 ? 'aria-disabled="true" title="'.Helpers::e($v['name']).' is out of stock"' : '' ?>><?= Helpers::e($v['name']) ?><?php if ($vStock <= 0): ?><span class="sr-only"> (out of stock)</span><?php endif; ?></button>
         <?php endforeach; ?>
       </div>
       <input type="hidden" data-pdp-variant value="">
+      <span class="field-hint pdp-option-hint" data-option-hint>Choose <?= $variantIsSize ? 'your size' : 'an option' ?> before adding to cart.</span>
     </div>
     <?php else: ?><input type="hidden" data-pdp-variant value=""><?php endif; ?>
     <?php if (!empty($meta['custom_options'])): ?>
@@ -185,5 +195,6 @@ require APP_ROOT . '/includes/header.php';
 <?php endif; ?>
 </section>
 <div id="compareBar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:85;background:var(--c-ink);color:#fff;padding:12px 20px"><div class="container row-between"><span id="compareText">Compare products</span><a class="btn btn-sm btn-outline" style="border-color:#fff;color:#fff" href="/shop">Continue shopping</a></div></div>
-echo '<script src="/assets/js/product-gallery.js" defer></script>';
+<script src="/assets/js/product-gallery.js" defer></script>
+<script src="/assets/js/pdp-options.js" defer></script>
 <?php require APP_ROOT . '/includes/footer.php';

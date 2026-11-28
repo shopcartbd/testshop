@@ -9,5 +9,6 @@ api_method('POST'); api_csrf(); api_rate('cart.add',60,300);
 $pid=Request::id('product_id'); $vid=Request::id('variant_id');
 if($pid===''){ Response::fail('Choose a product.',['product_id'=>'Product id is required.'],422); }
 $custom = Request::input('custom_options', []);
-CartService::add($pid,$vid,Request::int('quantity',1,1,99),is_array($custom) ? $custom : []);
+$picked = (string)Request::input('image_url', '');
+CartService::add($pid,$vid,Request::int('quantity',1,1,99),is_array($custom) ? $custom : [], $picked);
 api_cart_response('Added to your cart.');

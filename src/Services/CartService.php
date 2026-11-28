@@ -8,6 +8,7 @@ use AllStore\Core\Auth;
 use AllStore\Core\Session;
 use AllStore\Core\AppException;
 use AllStore\Models\CatalogRepository;
+use Throwable;
 
 /** Prices, stock, discounts, tax and totals are ALWAYS recomputed from the DB. */
 final class CartService
@@ -16,6 +17,7 @@ final class CartService
     private static ?array $cartCache = null;
     private static bool $cartLoaded = false;
     private static array $itemsCache = [];
+    private static ?bool $pickedImageSupport = null;
 
     private static function invalidateItems(): void { self::$itemsCache = []; }
 
@@ -84,17 +86,30 @@ final class CartService
         self::invalidate();
     }
 
+    /** True when cart_items carries the optional shopper-picked image column. */
+    public static function supportsPickedImage(): bool
+    {
+        if (self::$pickedImageSupport !== null) { return self::$pickedImageSupport; }
+        try {
+            Database::all('SELECT image_url FROM cart_items LIMIT 1');
+            return self::$pickedImageSupport = true;
+        } catch (Throwable $e) {
+            return self::$pickedImageSupport = false;
+        }
+    }
+
     public static function items(bool $saved = false): array
     {
         $cacheKey = $saved ? 'saved' : 'active';
         if (array_key_exists($cacheKey, self::$itemsCache)) { return self::$itemsCache[$cacheKey]; }
         $cart = self::cart(false);
         if (!$cart) { return self::$itemsCache[$cacheKey] = []; }
+        $pickedExpr = self::supportsPickedImage() ? 'ci.image_url' : "''";
         $rows = Database::all("SELECT ci.*, p.name, p.slug, p.sku, p.price_cents, p.compare_cents, p.stock,
             p.status AS product_status, p.weight_grams, p.tax_rate, p.return_eligible,
             p.is_digital, p.product_type,
             v.name AS variant_name, v.sku AS variant_sku, v.price_cents AS variant_price, v.stock AS variant_stock, v.options AS variant_options,
-            (SELECT pi.url FROM product_images pi WHERE pi.product_id=p.id ORDER BY pi.is_primary DESC, pi.sort_order ASC LIMIT 1) AS image_url
+            COALESCE(NULLIF({$pickedExpr}, ''), NULLIF(v.image_url, ''), (SELECT pi.url FROM product_images pi WHERE pi.product_id=p.id ORDER BY pi.is_primary DESC, pi.sort_order ASC LIMIT 1)) AS image_url
             FROM cart_items ci JOIN products p ON p.id=ci.product_id
             LEFT JOIN product_variants v ON v.id=ci.variant_id
             WHERE ci.cart_id=:c AND ci.saved_for_later=:s ORDER BY ci.created_at ASC", ['c'=>$cart['id'],'s'=>$saved ? 1 : 0]);
@@ -142,7 +157,7 @@ final class CartService
         return $s;
     }
 
-    public static function add(string $productId, string $variantId = '', int $qty = 1, array $customOptions = []): array
+    public static function add(string $productId, string $variantId = '', int $qty = 1, array $customOptions = [], string $pickedImage = ''): array
     {
         $qty = max(1, min(99, $qty));
         $p = Database::first("SELECT * FROM products WHERE id=:i AND status='active' AND deleted_at IS NULL", ['i'=>$productId]);
@@ -157,6 +172,10 @@ final class CartService
             $stock = (int)$v['stock']; $price = (int)$v['price_cents'];
         }
         if ($stock < 1) { throw new AppException('This item is currently out of stock.', 409); }
+        // The gallery image the shopper actually chose is stored per cart line so the
+        // cart and checkout show the same picture. Only images that belong to this
+        // product (or its variant) are accepted, so no arbitrary URL can be injected.
+        $pickedImage = self::validPickedImage($productId, $baseVariant, $pickedImage);
         $definitions = CatalogRepository::customOptions($productId);
         if ($customOptions !== [] && $definitions === []) {
             throw new AppException('This product does not accept custom options.', 422);
@@ -168,15 +187,32 @@ final class CartService
             ['c'=>$cart['id'],'p'=>$productId,'v'=>$variantId]);
         $newQty = min(99, $qty + (int)($existing['quantity'] ?? 0));
         if ($newQty > $stock) { throw new AppException('Only ' . $stock . ' units are available.', 409); }
+        $withImage = self::supportsPickedImage();
         if ($existing) {
-            Database::update('cart_items', ['quantity'=>$newQty,'updated_at'=>Helpers::now()], 'id=:i', ['i'=>$existing['id']]);
+            $update = ['quantity'=>$newQty,'updated_at'=>Helpers::now()];
+            if ($withImage && $pickedImage !== '') { $update['image_url'] = $pickedImage; }
+            Database::update('cart_items', $update, 'id=:i', ['i'=>$existing['id']]);
         } else {
-            Database::insert('cart_items', ['id'=>Helpers::uuid(),'cart_id'=>$cart['id'],'product_id'=>$productId,
+            $row = ['id'=>Helpers::uuid(),'cart_id'=>$cart['id'],'product_id'=>$productId,
                 'variant_id'=>$variantId,'quantity'=>$newQty,'saved_for_later'=>0,
-                'created_at'=>Helpers::now(),'updated_at'=>Helpers::now()]);
+                'created_at'=>Helpers::now(),'updated_at'=>Helpers::now()];
+            if ($withImage) { $row['image_url'] = $pickedImage; }
+            Database::insert('cart_items', $row);
         }
         self::touchCart();
         return ['count'=>self::count(), 'price_cents'=>$price];
+    }
+
+    /** Accept only media that really belongs to this product; otherwise ignore it. */
+    private static function validPickedImage(string $productId, ?array $baseVariant, string $picked): string
+    {
+        $picked = trim($picked);
+        if ($picked === '' || mb_strlen($picked) > 500) { return ''; }
+        $variantImage = trim((string)($baseVariant['image_url'] ?? ''));
+        if ($variantImage !== '' && $variantImage === $picked) { return $picked; }
+        $match = Database::value('SELECT url FROM product_images WHERE product_id=:p AND url=:u LIMIT 1',
+            ['p'=>$productId, 'u'=>$picked]);
+        return $match ? $picked : '';
     }
 
     /** Persist a configured custom product as a deterministic active variant. */

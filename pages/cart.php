@@ -21,7 +21,7 @@ foreach ($items as $it) {
     echo '<div class="cart-item"><a href="'.Helpers::url('/product/'.$it['slug']).'"><img src="'.Helpers::e($it['image_url']).'" alt="'.Helpers::e($it['name']).'" loading="lazy"></a>';
     echo '<div><a class="row-title" style="font-weight:600" href="'.Helpers::url('/product/'.$it['slug']).'">'.Helpers::e($it['name']).'</a>';
     echo '<div class="text-muted" style="font-size:12px;margin-top:4px">'.Helpers::e($it['sku']).($it['variant_name'] ? ' · '.Helpers::e($it['variant_name']) : '').'</div>';
-    $cartDetails = Helpers::orderItemDetails((array)($it['options'] ?? []));
+    $cartDetails = Helpers::orderItemDetails((array)($it['options'] ?? []), (string)($it['variant_name'] ?? ''));
     foreach ($cartDetails['options'] as $option) { echo '<div class="text-subtle" style="font-size:11px;margin-top:2px">'.Helpers::e($option['label']).': '.Helpers::e($option['value']).'</div>'; }
     if (!empty($cartDetails['bundle_items'])) { echo '<div class="text-subtle" style="font-size:11px;margin-top:2px">Bundle: '.Helpers::e(count($cartDetails['bundle_items'])).' included items</div>'; }
     if (!empty($it['is_digital'])) { echo '<div class="text-subtle" style="font-size:11px;margin-top:2px">Digital delivery · no courier needed</div>'; }

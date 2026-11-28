@@ -30,6 +30,7 @@ if (Request::isPost()) {
             $in['digital_file_url'] = preg_match('#^supabase-private:[A-Za-z0-9/_\.\-]{1,300}$#', $digital)
                 ? $digital : ($digital === '' ? '' : admin_safe_url($digital));
         }
+        $in['sizes'] = Request::str('sizes','',400);
         $in['product_kind'] = Request::str('product_kind','physical',40);
         $in['custom_options'] = Request::str('custom_options','',20000);
         $in['bundle_items'] = Request::str('bundle_items','',20000);
@@ -64,7 +65,13 @@ if (Request::isPost()) {
         $in['images'] = array_values(array_slice($images, 0, 12));
         $saved = CatalogRepository::saveProduct($in, $id !== '' ? $id : null);
         Logger::audit($id!==''?'admin.product.updated':'admin.product.created','products',$saved);
-        Session::flash('success','Product saved.');
+        $sizeInfo = CatalogRepository::sizeVariants($saved);
+        $sizeNames = [];
+        foreach ($sizeInfo as $sv) {
+            $svOpts = (array)Helpers::decode((string)($sv['options'] ?? '{}'), []);
+            $sizeNames[] = (string)($svOpts['Size'] ?? $sv['name']);
+        }
+        Session::flash('success','Product saved.' . ($sizeNames !== [] ? ' Sizes: ' . implode(' · ', $sizeNames) . '.' : ''));
         Response::redirect('/admin/products');
     } catch (AppException $e) { Session::flash('error',$e->getMessage()); Response::redirect(Request::path().($id!==''?'?id='.rawurlencode($id):'')); }
       catch (\Throwable $e) { Logger::exception($e); Session::flash('error','Product could not be saved.'); Response::redirect(Request::path().($id!==''?'?id='.rawurlencode($id):'')); }
@@ -129,6 +136,12 @@ echo '<div class="field"><label for="warranty">Warranty</label><input class="inp
 echo '<div class="field"><label for="supplier_name">Supplier</label><input class="input" id="supplier_name" name="supplier_name" value="'.$v('supplier_name').'"></div>';
 echo '<div class="field"><label for="video_url">Video URL (https)</label><input class="input" type="url" id="video_url" name="video_url" value="'.$v('video_url').'"></div>';
 echo '<div class="field span-2"><label for="gallery_urls">Gallery URLs (optional, one per line)</label><textarea class="textarea" id="gallery_urls" name="gallery_urls" style="min-height:80px">'.Helpers::e(implode("\n",$gallery)).'</textarea><span class="field-hint">Existing gallery URLs stay here. You can also upload several images at once below.</span></div>';
+$sizesValue = $id !== '' ? CatalogRepository::sizeFieldValue($id) : '';
+echo '<div class="field span-2"><label for="sizes">Sizes / options (optional)</label>'
+    . '<input class="input" id="sizes" name="sizes" value="' . Helpers::e($sizesValue) . '" placeholder="S, M, L, XL" maxlength="400">'
+    . '<span class="field-hint">Clothing, shoes and any product with choices: type the sizes separated by commas. '
+    . 'Each size becomes a real option on the product page — the customer must pick one before adding to cart, and the order keeps the chosen size. '
+    . 'Leave empty for a single-size product. (Per-size price, stock and photo: <a href="' . Helpers::url('/admin/products/' . ($id !== '' ? rawurlencode($id) : '') . '/variants') . '">Variants</a>.)</span></div>';
 $mediaStatus = UploadService::status();
 $mediaHint = $mediaStatus['provider'] === 'cloudinary'
     ? 'Uploads pass through the server API to Cloudinary (' . $mediaStatus['cloudinary']['cloud_name'] . ' · /' . $mediaStatus['cloudinary']['folder'] . '). Only the secure URL is saved in the database.'
