@@ -25,7 +25,7 @@ $history = OrderRepository::history((string)$order['id']);
 $shipment = OrderRepository::shipment((string)$order['id']);
 $invoice = OrderRepository::invoice((string)$order['id']);
 $returns = OrderRepository::returnsForOrder((string)$order['id']);
-echo '<div class="row-between wrap" style="margin-bottom:var(--sp-5)"><div>'.status_badge((string)$order['status']).' '.status_badge((string)$order['payment_status']).'</div><div class="row"><a class="btn btn-outline btn-sm" href="/account/tracking/'.rawurlencode($number).'">'.icon('truck',15).' Track order</a>'.($invoice?'<a class="btn btn-outline btn-sm" href="/account/orders/'.rawurlencode($number).'?invoice=1">'.icon('file',15).' Invoice</a>':'').'</div></div>';
+echo '<div class="row-between wrap" style="margin-bottom:var(--sp-5)"><div class="row" style="gap:14px;align-items:center"><span class="text-subtle" style="font-size:12px">Status: '.status_badge((string)$order['status']).'</span><span class="text-subtle" style="font-size:12px">Payment: '.status_badge((string)$order['payment_status']).'</span></div><div class="row"><a class="btn btn-outline btn-sm" href="/account/tracking/'.rawurlencode($number).'">'.icon('truck',15).' Track order</a>'.($invoice?'<a class="btn btn-outline btn-sm" href="/account/orders/'.rawurlencode($number).'?invoice=1">'.icon('file',15).' Invoice</a>':'').'</div></div>';
 account_card_start('Items');
 foreach ($items as $it) {
     $d = OrderRepository::itemDetails($it);
@@ -45,8 +45,10 @@ echo '</div>'.($shipment && $shipment['tracking_number'] ? '<div class="alert al
 echo '<div class="card card-pad"><h3 style="font-size:var(--fs-md);margin-bottom:14px">Status history</h3><div class="timeline">';
 foreach ($history as $h) { echo '<div class="timeline-item done"><strong>'.Helpers::e(ucwords(str_replace('_',' ',(string)$h['to_status']))).'</strong><span>'.Helpers::dateNice($h['created_at']).($h['note']?' · '.Helpers::e($h['note']):'').'</span></div>'; }
 echo '</div></div></div>';
-if (in_array($order['status'],['pending','confirmed','processing'],true)) {
-    echo '<form method="post" style="margin-top:var(--sp-5)">'.Session::csrfField().'<input type="hidden" name="action" value="cancel"><button class="btn btn-danger btn-sm" type="submit" data-confirm="Cancel this order? Stock will be restored.">Cancel this order</button></form>';
+if (OrderRepository::canCustomerCancel($order)) {
+    echo '<div class="card card-pad" style="margin-top:var(--sp-5);border-color:var(--c-border)"><div class="row-between wrap" style="gap:12px"><div><strong style="font-size:13px">Still waiting for confirmation</strong><div class="text-subtle" style="font-size:12px;margin-top:2px">You can cancel this order until the shop confirms it. After that, please contact support.</div></div><form method="post" style="margin:0">'.Session::csrfField().'<input type="hidden" name="action" value="cancel"><button class="btn btn-danger btn-sm" type="submit" data-confirm="Cancel this order? Stock will be restored.">Cancel this order</button></form></div></div>';
+} elseif (in_array((string)$order['status'], ['confirmed','processing','packed','shipped'], true)) {
+    echo '<div class="alert alert-info" style="margin-top:var(--sp-5)">'.icon('check-circle',16).'<span>This order is already confirmed, so online cancellation is closed. Need help? <a href="/contact">Contact support</a> with order '.Helpers::e($number).'.</span></div>';
 }
 if ($order['status'] === 'delivered') {
     account_card_start('Request a return');

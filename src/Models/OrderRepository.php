@@ -200,12 +200,20 @@ final class OrderRepository
         }
     }
 
+    /** True only while the shopper may still cancel this order themselves. */
+    public static function canCustomerCancel(array $order): bool
+    {
+        return (string)($order['status'] ?? '') === 'pending';
+    }
+
     public static function cancelByCustomer(string $orderNumber, string $userId): void
     {
         $o = self::findByNumberForUser($orderNumber, $userId);
         if (!$o) { throw new AppException('Order not found.', 404); }
-        if (!in_array($o['status'], ['pending','confirmed','processing'], true)) {
-            throw new AppException('This order can no longer be cancelled.', 422);
+        // Shoppers may cancel only while the order is still pending. Once the shop
+        // confirms it (or it moves any further) cancellation is closed for the customer.
+        if ((string)$o['status'] !== 'pending') {
+            throw new AppException('This order has already been confirmed, so it can no longer be cancelled. Please contact support.', 422);
         }
         self::updateStatus((string)$o['id'], 'cancelled', 'Cancelled by customer', $userId);
     }

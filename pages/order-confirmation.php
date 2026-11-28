@@ -34,6 +34,9 @@ if (!$allowed || !$order) {
         echo '</div><strong style="font-size:13px">'.Helpers::money((int)$it['total_cents']).'</strong></div>';
     }
     echo '<div style="margin-top:var(--sp-4)"><div class="summary-line"><span>Subtotal</span><strong>'.Helpers::money((int)$order['subtotal_cents']).'</strong></div><div class="summary-line"><span>Discount</span><strong>'.((int)$order['discount_cents'] > 0 ? '−' : '').Helpers::money((int)$order['discount_cents']).'</strong></div><div class="summary-line"><span>Shipping</span><strong>'.Helpers::money((int)$order['shipping_cents']).'</strong></div><div class="summary-line"><span>Tax</span><strong>'.Helpers::money((int)$order['tax_cents']).'</strong></div><div class="summary-line total"><span>Total paid</span><strong>'.Helpers::money((int)$order['total_cents']).'</strong></div></div></div>';
+    if (Auth::check() && OrderRepository::canCustomerCancel($order)) {
+        echo '<p class="text-muted text-center" style="margin-top:var(--sp-5);font-size:13px">Changed your mind? You can <a href="/account/orders/'.rawurlencode((string)$order['order_number']).'">cancel this order</a> from your account until we confirm it.</p>';
+    }
     echo '<div class="row" style="justify-content:center;gap:10px;margin-top:var(--sp-6);flex-wrap:wrap"><a class="btn btn-primary" href="'.(Auth::check()?'/account/orders/'.rawurlencode($order['order_number']):'/').'">'.(Auth::check()?'View order details':'Continue shopping').'</a><a class="btn btn-outline" href="/shop">Keep shopping</a></div>';
     if (!MailService::configured()) { echo '<p class="field-hint text-center" style="margin-top:var(--sp-5)">Email confirmation is disabled because no mail provider is configured. Your order is still saved and visible in your account.</p>'; }
     echo '</div></section>';

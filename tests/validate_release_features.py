@@ -155,6 +155,7 @@ check("PDP gallery CSS is scoped to the product page only",
 
 # COD confirmation must never require payment_status=paid. 2026-11-27 audit.
 order_repo = read("src/Models/OrderRepository.php")
+order_details = read("pages/account/order-details.php")
 update_start = order_repo.index("public static function updateStatus")
 update_end = order_repo.index("private static function restoreStock", update_start)
 update_body = order_repo[update_start:update_end]
@@ -169,6 +170,16 @@ check(
     and "never gate this on paid" in update_body
     and "payment_status" not in update_body,
 )
+check(
+    "Customer cancellation is allowed only while the order is still pending",
+    "public static function canCustomerCancel" in order_repo
+    and "(string)$o['status'] !== 'pending'" in order_repo
+    and "has already been confirmed, so it can no longer be cancelled" in order_repo
+    and order_details.count("OrderRepository::canCustomerCancel($order)") >= 1
+    and ">Cancel this order</button>" in order_details
+    and "in_array($order['status'],['pending','confirmed','processing'],true)" not in order_details,
+)
+
 check(
     "Admin order page confirms COD before payment and shows only valid next statuses",
     all(x in order_admin for x in [
