@@ -8,6 +8,7 @@ use AllStore\Core\Response;
 use AllStore\Services\MailService;
 use AllStore\Services\PaymentService;
 use AllStore\Services\UploadService;
+use AllStore\Services\CloudinaryService;
 api_method('GET');
 
 $connected = false;
@@ -104,6 +105,10 @@ $data = [
         'mail' => MailService::configured(),
         'online_payments' => PaymentService::stripeConfigured(),
         'storage' => UploadService::configured(),
+        // Names and booleans only; never a credential value.
+        'media_provider' => UploadService::provider(),
+        'cloudinary_configured' => CloudinaryService::configured(),
+        'cloudinary_missing_env' => CloudinaryService::missingEnv(),
     ],
     'config' => [
         'app_url_host' => $appHost,

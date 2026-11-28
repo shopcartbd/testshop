@@ -333,6 +333,16 @@ check(
     and all(k in read(".env.example") for k in ("CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"))
     and (ROOT / "docs/CLOUDINARY_MEDIA.md").is_file(),
 )
+check(
+    "Cloudinary misconfiguration names the wrong variable, never the value",
+    "CLOUDINARY_CLOUD_NAME does not match this API key" in read("src/Services/CloudinaryService.php")
+    and "cloud[ _]?name" in read("src/Services/CloudinaryService.php"),
+)
+check(
+    "Health check reports the media provider without exposing credentials",
+    "'media_provider' => UploadService::provider()" in read("api/handlers/health.php")
+    and "CloudinaryService::missingEnv()" in read("api/handlers/health.php"),
+)
 cloudinary_secret_re = re.compile(r"(?:cloudinary://[A-Za-z0-9_\-]{6,}:|api_secret\s*=\s*['\"][A-Za-z0-9_\-]{8,})")
 secret_hits = []
 for path in list(ROOT.rglob("*.php")) + list(ROOT.rglob("*.js")) + list(ROOT.rglob("*.md")) + list(ROOT.rglob("*.example")):

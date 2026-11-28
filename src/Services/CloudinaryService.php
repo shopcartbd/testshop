@@ -130,11 +130,12 @@ final class CloudinaryService
 
         $data = json_decode($body, true);
         if ($status < 200 || $status >= 300 || !is_array($data)) {
+            $apiMessage = is_array($data) ? (string)($data['error']['message'] ?? '') : '';
             Logger::log('error', 'cloudinary.upload_failed', [
                 'status' => $status,
                 'detail' => mb_substr(Security::redact($body . ' ' . $err), 0, 180),
             ]);
-            throw new AppException(self::failureMessage($status), 502);
+            throw new AppException(self::failureMessage($status, $apiMessage), 502);
         }
         $url = (string)($data['secure_url'] ?? '');
         if (preg_match('#^https://#i', $url) !== 1) {
@@ -153,8 +154,17 @@ final class CloudinaryService
     }
 
     /** Human, credential-free error text for the admin flash message. */
-    private static function failureMessage(int $status): string
+    private static function failureMessage(int $status, string $apiMessage = ''): string
     {
+        // Cloudinary answers "Invalid cloud_name x" / "cloud_name mismatch" when
+        // the cloud name does not belong to the API key pair; say so plainly
+        // instead of blaming the key.
+        if ($apiMessage !== '' && preg_match('/cloud[ _]?name/i', $apiMessage) === 1) {
+            return 'CLOUDINARY_CLOUD_NAME does not match this API key. Copy the exact Cloud name from the Cloudinary dashboard.';
+        }
+        if ($apiMessage !== '' && preg_match('/(invalid|unknown)\s+(api[ _]?key|signature)|signature.*(invalid|mismatch)/i', $apiMessage) === 1) {
+            return 'Cloudinary rejected the credentials. Check CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in Vercel.';
+        }
         if ($status === 401 || $status === 403) {
             return 'Cloudinary rejected the credentials. Check CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in Vercel.';
         }
