@@ -32,10 +32,11 @@ bd = json.loads(read("config/bd_locations.default.json"))
 division_count = len(bd["divisions"])
 district_count = sum(len(d["districts"]) for d in bd["divisions"])
 area_count = sum(len(x["areas"]) for d in bd["divisions"] for x in d["districts"])
+thana_count = sum(1 for d in bd["divisions"] for x in d["districts"] for a in x["areas"] if a.get("type") == "thana")
 check(
-    "Bundled Bangladesh hierarchy has 8 divisions, 64 districts and 495 upazilas",
-    division_count == 8 and district_count == 64 and area_count == 495,
-    f"got {division_count}/{district_count}/{area_count}",
+    "Bundled Bangladesh hierarchy has 8 divisions, 64 districts, 495 upazilas and 49 city thanas",
+    division_count == 8 and district_count == 64 and area_count == 544 and thana_count == 49,
+    f"got {division_count}/{district_count}/{area_count}/thanas={thana_count}",
 )
 check("Bundled Bangladesh data includes CC-BY attribution", "CC-BY-4.0" in bd.get("_attribution", "") + bd.get("_license", ""))
 
@@ -193,6 +194,86 @@ check(
     "Standalone admin status API has no payment gate",
     "OrderRepository::updateStatus" in read("api/handlers/admin-order-status.php")
     and "payment_status" not in read("api/handlers/admin-order-status.php"),
+)
+
+# --- Checkout delivery-charge accuracy (2026-11-28 release) -----------------
+zone_service = read("src/Services/DeliveryZoneService.php")
+loc_service = read("src/Services/LocationService.php")
+loc_seed = read("config/bd_locations.default.json")
+header_tpl = read("includes/header.php")
+check(
+    "Dhaka city thanas exist in the bundled location seed",
+    '"BD3026T001"' in loc_seed and '"Dhanmondi"' in loc_seed
+    and '"Gulshan"' in loc_seed and '"Mirpur"' in loc_seed and '"Uttara"' in loc_seed,
+)
+check(
+    "Saved location hierarchies are merged with a newer bundled seed",
+    "seedRevision(" in loc_service and "mergeMissing(" in loc_service
+    and "_seed_rev" in loc_service and "syncDefaults(" in loc_service,
+)
+check(
+    "Dhaka-city thanas are classified as the city delivery zone",
+    "isDhakaCityThana(" in zone_service and "area_type" in zone_service,
+)
+check(
+    "A free-delivery threshold below the cheapest zone charge is ignored",
+    "effectiveFreeOver(" in zone_service and "freeOverIgnored(" in zone_service,
+)
+check(
+    "Cart and checkout never show a zero delivery charge before an area is chosen",
+    "Calculated at checkout" in read("pages/cart.php")
+    and "Select area" in read("pages/checkout.php")
+    and "data-delivery-hint" in read("pages/checkout.php")
+    and "deliveryPending" in read("assets/js/checkout.js")
+    and "data-delivery-pending" in read("pages/checkout.php"),
+)
+check(
+    "Bangladesh cascade heals a district that belongs to another division",
+    "healSelection(" in read("assets/js/bd-locations.js")
+    and "districtBelongsToDivision(" in read("assets/js/bd-locations.js"),
+)
+
+# --- COD admin UI + payment gateway settings (2026-11-28 release) -----------
+gateway_service = read("src/Services/PaymentGatewayService.php")
+order_admin = read("admin/order-details.php")
+check(
+    "COD orders hide the payment status form in the admin",
+    "pays the courier on delivery" in order_admin
+    and "Cash received (mark paid)" in order_admin
+    and "if ($isCodOrder)" in order_admin,
+)
+check(
+    "Payment gateway settings page and service exist",
+    "PROVIDERS" in gateway_service and "mask(" in gateway_service
+    and "isLive(" in gateway_service
+    and read("admin/payment-gateway.php") != "",
+)
+check(
+    "Checkout only lists a gateway that is enabled and complete",
+    "PaymentGatewayService::onlineMethods()" in read("src/Services/PaymentService.php")
+    and "PaymentGatewayService::stripeConfig()" in read("src/Services/PaymentService.php"),
+)
+check(
+    "Admin routes and navigation include payment settings and branding",
+    "'/admin/payment-gateway' => 'admin/payment-gateway.php'" in read("src/Core/Router.php")
+    and "'/admin/branding' => 'admin/branding.php'" in read("src/Core/Router.php")
+    and "/admin/payment-gateway" in read("includes/admin-layout.php")
+    and "/admin/branding" in read("includes/admin-layout.php"),
+)
+check(
+    "Favicon set ships with a manifest and stays admin-configurable",
+    all(__import__("os").path.isfile(ROOT.joinpath("assets/img", name)) for name in [
+        "favicon.svg", "favicon.ico", "favicon-16.png", "favicon-32.png",
+        "favicon-192.png", "favicon-512.png", "favicon-180.png", "site.webmanifest",
+    ])
+    and "site.webmanifest" in header_tpl
+    and "favicon-180.png" in header_tpl
+    and "site_logo_url" in header_tpl and "favicon_url" in header_tpl,
+)
+check(
+    "Branding page manages logo and favicon uploads",
+    "site_logo_url" in read("admin/branding.php") and "favicon_url" in read("admin/branding.php")
+    and "UploadService::store" in read("admin/branding.php"),
 )
 
 # No exact token literal may enter this release either.

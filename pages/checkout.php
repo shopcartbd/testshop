@@ -148,9 +148,11 @@ foreach ($totals['items'] as $it) {
 }
 echo '<div style="margin-top:var(--sp-4)"><div class="summary-line"><span>Subtotal</span><strong data-checkout-total="subtotal">'.Helpers::money($totals['subtotal_cents']).'</strong></div>';
 echo '<div class="summary-line"><span>Discount</span><strong data-checkout-total="discount">'.((int)$totals['discount_cents'] > 0 ? '−' : '').Helpers::money($totals['discount_cents']).'</strong></div>';
-echo '<div class="summary-line"><span>Delivery</span><strong data-checkout-total="shipping">'.Helpers::money($totals['shipping_cents']).'</strong></div>';
+$deliveryPending = (string)($totals['shipping']['method'] ?? '') === 'select_area';
+echo '<div class="summary-line"><span>Delivery</span><strong data-checkout-total="shipping"'.($deliveryPending ? ' data-delivery-pending="1"' : '').'>'.($deliveryPending ? 'Select area' : Helpers::money($totals['shipping_cents'])).'</strong></div>';
 echo '<div class="summary-line"><span>Tax</span><strong data-checkout-total="tax">'.Helpers::money($totals['tax_cents']).'</strong></div>';
-echo '<div class="summary-line total"><span>Total</span><strong data-checkout-total="total">'.Helpers::money($totals['total_cents']).'</strong></div></div>';
+echo '<div class="summary-line total"><span>Total</span><strong data-checkout-total="total">'.Helpers::money($totals['total_cents']).'</strong></div>';
+echo '<p class="field-hint checkout-delivery-hint" data-delivery-hint'.($deliveryPending ? '' : ' hidden').'>'.($deliveryPending ? 'Delivery charge is added after you choose division, district and thana — the total above is before delivery.' : '').'</p></div>';
 echo '<button class="btn btn-primary btn-block btn-lg" type="submit" style="margin-top:var(--sp-4)">Place order '.icon('lock',16).'</button>';
 echo '</aside></div></form></div></section>';
 echo '<script src="/assets/js/bd-locations.js" defer></script><script src="/assets/js/checkout.js" defer></script>';

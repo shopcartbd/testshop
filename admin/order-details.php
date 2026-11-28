@@ -92,7 +92,7 @@ if (!empty($order['customer_note'])) { $copyLines[]='Note: '.(string)$order['cus
 $copyText=implode("\n",$copyLines);
 admin_header(['title'=>'Order '.$number,'subtitle'=>'Fulfilment, payment and customer record','active'=>'orders']);
 echo '<div class="row-between wrap" style="margin-bottom:16px"><div><h2>'.Helpers::e($number).'</h2><p class="text-muted" style="font-size:13px">Placed '.Helpers::e(Helpers::dateNice($order['placed_at'])).' · '.admin_status($order).' '.admin_status($order,'payment_status').'</p></div><a class="btn btn-outline btn-sm" href="/admin/orders">← All orders</a></div>';
-echo '<div class="stat-grid" style="margin-bottom:16px"><div class="stat-card"><div class="stat-label">Total</div><div class="stat-value">'.Helpers::money((int)$order['total_cents']).'</div></div><div class="stat-card"><div class="stat-label">Items</div><div class="stat-value">'.count($items).'</div></div><div class="stat-card"><div class="stat-label">Customer</div><div class="stat-value" style="font-size:18px">'.Helpers::e($order['customer_name']).'</div></div><div class="stat-card"><div class="stat-label">Payment</div><div class="stat-value" style="font-size:18px">'.Helpers::e(ucfirst((string)$order['payment_method'])).'</div></div></div>';
+echo '<div class="stat-grid" style="margin-bottom:16px"><div class="stat-card"><div class="stat-label">Total</div><div class="stat-value">'.Helpers::money((int)$order['total_cents']).'</div></div><div class="stat-card"><div class="stat-label">Items</div><div class="stat-value">'.count($items).'</div></div><div class="stat-card"><div class="stat-label">Customer</div><div class="stat-value" style="font-size:18px">'.Helpers::e($order['customer_name']).'</div></div><div class="stat-card"><div class="stat-label">Payment</div><div class="stat-value" style="font-size:18px">'.Helpers::e(match (strtolower((string)$order['payment_method'])) { 'cod' => 'Cash on Delivery', 'stripe' => 'Stripe (online)', 'manual' => 'Manual', default => ucfirst((string)$order['payment_method']) }).'</div></div></div>';
 echo '<div class="admin-grid-2"><div class="card card-pad"><div class="row-between" style="margin-bottom:12px"><h3>Items</h3><a class="btn btn-outline btn-sm" href="?export_items=csv">'.icon('download',13).' Download item list</a></div>';
 foreach ($items as $it) {
     $d = OrderRepository::itemDetails($it);
@@ -144,7 +144,7 @@ echo '</div>';
 echo '<details class="address-copy-details"><summary>Courier copy</summary><pre class="address-copy-preview">'.Helpers::e($copyText).'</pre></details></div>';
 if ($order['customer_note']) echo '<div class="alert alert-info" style="margin-top:12px">'.icon('message',16).'<span>'.Helpers::e($order['customer_note']).'</span></div>';
 $statusHint = $isCodOrder
-    ? 'COD orders can be confirmed while payment is Pending. Mark Paid only after cash is collected. / COD অর্ডার পেমেন্ট Pending থাকতেই Confirmed করা যাবে; নগদ সংগ্রহের আগে Paid করবেন না।'
+    ? 'COD orders can be confirmed while payment is Pending — no online payment is needed. Cash is marked received after delivery. / COD অর্ডার পেমেন্ট Pending থাকতেই Confirmed করা যাবে; নগদ সংগ্রহের পর “Cash received” চাপুন।'
     : 'Only valid next statuses are shown. Payment status is separate from order status. / শুধু বৈধ পরবর্তী status দেখানো হয়; পেমেন্ট status আলাদা।';
 echo '<hr><h4 style="margin-bottom:10px">Status transition / COD confirmation</h4><form method="post">'.Session::csrfField().'<input type="hidden" name="action" value="status"><div class="form-grid"><div class="field"><label>New status</label><select class="select" name="status">';
 foreach ($statusChoices as $s) {
@@ -153,9 +153,29 @@ foreach ($statusChoices as $s) {
     echo '<option value="'.$s.'" '.(($order['status']===$s)?'selected':'').'>'.Helpers::e($label).'</option>';
 }
 echo '</select></div><div class="field"><label>Note</label><input class="input" name="note" maxlength="500"></div></div><button class="btn btn-primary btn-sm" type="submit">Update status</button><p class="field-hint" style="margin-top:8px">'.Helpers::e($statusHint).'</p></form></div></div>';
-echo '<div class="admin-grid-2" style="margin-top:16px"><div class="card card-pad"><h3 style="margin-bottom:12px">Payment status & shipment</h3><form method="post">'.Session::csrfField().'<input type="hidden" name="action" value="payment"><div class="row"><select class="select" name="payment_status">';
-foreach (OrderRepository::PAYMENT_STATUSES as $s) echo '<option value="'.$s.'" '.(($order['payment_status']===$s)?'selected':'').'>'.Helpers::e(ucwords(str_replace('_',' ',$s))).'</option>';
-echo '</select><button class="btn btn-outline btn-sm" type="submit">Update payment status</button></div><p class="field-hint" style="margin-top:8px">Use Status transition above to confirm a COD order; this form only changes payment status.</p></form>';
+echo '<div class="admin-grid-2" style="margin-top:16px"><div class="card card-pad"><h3 style="margin-bottom:12px">'.($isCodOrder ? 'Cash on Delivery &amp; shipment' : 'Payment status &amp; shipment').'</h3>';
+if ($isCodOrder) {
+    // COD is collected by the courier: there is nothing to pay online, so the
+    // payment-status dropdown is hidden. Cash is confirmed with one button after
+    // the parcel reaches the customer.
+    $cashPaid = (string)$order['payment_status'] === 'paid';
+    echo '<div class="alert '.($cashPaid ? 'alert-success' : 'alert-info').'" style="margin-bottom:12px">'.icon($cashPaid ? 'check-circle' : 'banknote',16)
+        .'<span>'.($cashPaid
+            ? 'Cash received — this COD order is fully settled.'
+            : 'COD — the customer pays the courier on delivery. No online payment is needed and no payment status has to be set to move the order forward.')
+        .'</span></div>';
+    if (!$cashPaid && in_array((string)$order['status'], ['shipped','delivered'], true)) {
+        echo '<form method="post" style="margin-bottom:14px">'.Session::csrfField().'<input type="hidden" name="action" value="payment"><input type="hidden" name="payment_status" value="paid">'
+            .'<button class="btn btn-primary btn-sm" type="submit">'.icon('check',15).'Cash received (mark paid)</button>'
+            .'<p class="field-hint" style="margin-top:6px">Use this only after the courier hands over the cash.</p></form>';
+    } else {
+        echo '<p class="field-hint" style="margin-bottom:14px">Order status is managed in “Status transition” above. The “Cash received” button appears once the order is shipped or delivered.</p>';
+    }
+} else {
+    echo '<form method="post">'.Session::csrfField().'<input type="hidden" name="action" value="payment"><div class="row"><select class="select" name="payment_status">';
+    foreach (OrderRepository::PAYMENT_STATUSES as $s) echo '<option value="'.$s.'" '.(($order['payment_status']===$s)?'selected':'').'>'.Helpers::e(ucwords(str_replace('_',' ',$s))).'</option>';
+    echo '</select><button class="btn btn-outline btn-sm" type="submit">Update payment status</button></div><p class="field-hint" style="margin-top:8px">Online gateways confirm payment themselves; use this only for a manual correction.</p></form>';
+}
 echo '<form method="post">'.Session::csrfField().'<input type="hidden" name="action" value="shipment"><div class="form-grid"><div class="field"><label>Courier</label><select class="select" name="courier_id"><option value="">— None —</option>';
 foreach ($couriers as $c) echo '<option value="'.Helpers::e($c['id']).'" '.((($shipment['courier_id'] ?? '')===$c['id'])?'selected':'').'>'.Helpers::e($c['name']).'</option>';
 echo '</select></div><div class="field"><label>Tracking number</label><input class="input" name="tracking_number" value="'.Helpers::e($shipment['tracking_number'] ?? '').'" maxlength="100"></div><div class="field"><label>Estimated delivery</label><input class="input" type="date" name="estimated_delivery" value="'.Helpers::e(substr((string)($shipment['estimated_delivery'] ?? ''),0,10)).'"></div><div class="field"><label>Shipment status</label><select class="select" name="shipment_status">';

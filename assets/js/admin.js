@@ -102,4 +102,14 @@
     reader.onload = () => { out.textContent = String(reader.result).split('\n').slice(0, 6).join('\n'); };
     reader.readAsText(file.slice(0, 4096));
   });
+
+  /* ------------------------------------------------- payment gateway fields */
+  const gatewaySelect = qs('[data-gateway-provider]');
+  if (gatewaySelect) {
+    const syncGateway = () => {
+      qsa('[data-gateway-fields]').forEach(el => { el.hidden = el.dataset.gatewayFields !== gatewaySelect.value; });
+    };
+    gatewaySelect.addEventListener('change', syncGateway);
+    syncGateway();
+  }
 })();

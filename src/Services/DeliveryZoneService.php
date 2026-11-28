@@ -181,8 +181,10 @@ final class DeliveryZoneService
         return [
             'enabled' => (int)$config['enabled'] === 1,
             'simple_checkout' => self::simpleCheckoutEnabled(),
-            'free_over_cents' => (int)$config['free_over'],
-            'free_over_label' => Helpers::money((int)$config['free_over']),
+            'free_over_cents' => self::effectiveFreeOver($config),
+            'free_over_label' => Helpers::money(self::effectiveFreeOver($config)),
+            'free_over_saved_cents' => (int)$config['free_over'],
+            'free_over_ignored' => self::freeOverIgnored($config),
             'minimum_charge_cents' => min(array_map('intval', $config['rates'])),
             'zones' => $zones,
         ];
@@ -228,6 +230,12 @@ final class DeliveryZoneService
         // as Dhaka city. Everything outside Dhaka division is outside Dhaka.
         $isDhakaDivision = self::matchesAny($divisionFields, ['ঢাকা', 'Dhaka', 'BD30']);
         if (!$isDhakaDivision) { return self::zone('outside_dhaka', $config); }
+        // A thana record inside Dhaka district belongs to the city zone even when
+        // its name is missing from the admin-maintained list. This is what makes
+        // Dhanmondi / Gulshan / Mirpur / Uttara charge the city rate.
+        if (self::isDhakaCityThana($location)) {
+            return self::zone('dhaka_city', $config);
+        }
         // An exact city thana wins before the broader sub-area hints.
         if (self::matchesAny($areaFields, (array)$config['city_matches'])) {
             return self::zone('dhaka_city', $config);
@@ -243,6 +251,43 @@ final class DeliveryZoneService
         }
         // Remaining Dhaka-division districts default to the sub-area rate.
         return self::zone('dhaka_sub_area', $config);
+    }
+
+    /** True when the selected area is a thana of Dhaka district (city rate). */
+    public static function isDhakaCityThana(array $location): bool
+    {
+        $type = strtolower(trim((string)($location['area_type'] ?? '')));
+        if ($type !== 'thana') { return false; }
+        $district = [
+            (string)($location['district'] ?? ''), (string)($location['district_en'] ?? ''),
+            (string)($location['district_id'] ?? ''),
+        ];
+        $division = [
+            (string)($location['division'] ?? ''), (string)($location['division_en'] ?? ''),
+            (string)($location['region'] ?? ''), (string)($location['division_id'] ?? ''),
+        ];
+        return self::matchesAny($district, ['ঢাকা', 'Dhaka', 'BD3026'])
+            && self::matchesAny($division, ['ঢাকা', 'Dhaka', 'BD30']);
+    }
+
+    /**
+     * The free-delivery threshold only applies when it is at least the cheapest
+     * zone charge. A threshold below every charge (for example ৳5.00 saved by
+     * mistake) would make delivery free for the whole country, so it is ignored
+     * and flagged in the admin instead of silently removing the delivery income.
+     */
+    public static function effectiveFreeOver(array $config): int
+    {
+        $freeOver = (int)($config['free_over'] ?? 0);
+        if ($freeOver <= 0) { return 0; }
+        $minCharge = min(array_map('intval', array_values((array)($config['rates'] ?? [0]))));
+        return $freeOver >= $minCharge ? $freeOver : 0;
+    }
+
+    /** True when the saved free-over value is below every zone charge. */
+    public static function freeOverIgnored(array $config): bool
+    {
+        return (int)($config['free_over'] ?? 0) > 0 && self::effectiveFreeOver($config) === 0;
     }
 
     /** One shipping-rate row consumed by ShippingService and checkout.js. */
@@ -264,7 +309,7 @@ final class DeliveryZoneService
             ];
         }
         $zone = self::classify($location);
-        $freeOver = (int)$config['free_over'];
+        $freeOver = self::effectiveFreeOver($config);
         $free = $freeOver > 0 && $subtotalCents >= $freeOver;
         $cost = $free ? 0 : (int)$zone['charge_cents'];
         $eta = $zone['key'] === 'outside_dhaka' ? '3–6 business days' : '1–3 business days';

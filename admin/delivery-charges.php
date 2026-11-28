@@ -34,6 +34,7 @@ if (Request::isPost()) {
 
 $config = DeliveryZoneService::all();
 $summary = DeliveryZoneService::publicSummary();
+$freeOverIgnored = (bool)($summary['free_over_ignored'] ?? false);
 $counts = DeliveryZoneService::previewCounts();
 $csrf = Session::csrfField();
 $money = static fn(int $cents): string => number_format($cents / 100, 2, '.', '');
@@ -41,6 +42,9 @@ $lines = static fn(array $rows): string => Helpers::e(implode("\n", $rows));
 
 admin_header(['title'=>'Delivery charges','active'=>'delivery-charges']);
 echo '<div class="row-between wrap" style="margin-bottom:16px"><h2>Bangladesh delivery</h2><span class="badge '.((int)$config['enabled']===1?'badge-brand':'badge-neutral').'">'.((int)$config['enabled']===1?'Active':'Off').'</span></div>';
+if ($freeOverIgnored) {
+    echo '<div class="alert alert-warning" style="margin-bottom:16px">'.icon('alert',16).' <strong>Free delivery value ignored:</strong> it is saved as '.Helpers::e(Helpers::money((int)$summary['free_over_saved_cents'])).', which is below the cheapest zone charge ('.Helpers::e(Helpers::money((int)$summary['minimum_charge_cents'])).'), so customers pay the normal zone charge. Set a realistic threshold or 0 to turn free delivery off.</div>';
+}
 echo '<form method="post">'.$csrf.'<input type="hidden" name="action" value="save"><input type="hidden" name="version" value="'.(int)$config['version'].'">';
 echo '<div class="card card-pad" style="margin-bottom:16px"><div class="row-between wrap" style="margin-bottom:14px"><h3>Zone charges</h3><label class="checkbox"><input type="checkbox" name="enabled" value="1" '.((int)$config['enabled']===1?'checked':'').'><span>Enable</span></label></div>';
 echo '<div class="delivery-rate-grid">';
@@ -52,7 +56,7 @@ foreach ([
     echo '<div class="delivery-rate-card"><div class="zone-title">'.icon('truck',17).Helpers::e($label).'</div><div class="field"><label for="'.$field.'">Charge</label><div class="money-input"><span>'.Helpers::e(Helpers::currencySymbol()).'</span><input class="input" type="number" min="0" step="0.01" id="'.$field.'" name="'.$field.'" value="'.Helpers::e($money((int)$config['rates'][$key])).'" required></div></div></div>';
 }
 echo '</div>';
-echo '<div class="form-grid" style="margin-top:16px"><div class="field"><label for="free_over">Free delivery over</label><input class="input" type="number" min="0" step="0.01" id="free_over" name="free_over" value="'.Helpers::e($money((int)$config['free_over'])).'"></div>';
+echo '<div class="form-grid" style="margin-top:16px"><div class="field"><label for="free_over">Free delivery over</label><input class="input" type="number" min="0" step="0.01" id="free_over" name="free_over" value="'.Helpers::e($money((int)$config['free_over'])).'"><p class="field-hint">0 (or empty) = off. It must be at least the cheapest zone charge ('.Helpers::e(Helpers::money((int)$summary['minimum_charge_cents'])).'), otherwise every order would qualify for free delivery and the value is ignored.</p></div>';
 echo '<div class="field"><label>Checkout</label><label class="checkbox" style="min-height:42px"><input type="checkbox" name="simple_bd_checkout" value="1" '.((int)$config['simple_bd_checkout']===1?'checked':'').'><span>Simple Bangladesh checkout</span></label></div></div>';
 echo '<p class="field-hint" style="margin-top:6px">Name · phone · district · thana · full address only when the store default is Bangladesh.</p>';
 echo '</div>';

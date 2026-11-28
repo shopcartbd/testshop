@@ -211,7 +211,10 @@
       if (json.data && json.data.totals) {
         ['subtotal','discount','shipping','tax','total'].forEach(k => {
           const el = document.querySelector('[data-summary="' + k + '"]');
-          if (el && json.data.totals[k]) el.textContent = json.data.totals[k];
+          if (!el || !json.data.totals[k]) return;
+          // The cart shows a delivery placeholder until an area is chosen; keep it.
+          if (k === 'shipping' && el.dataset.deliveryPending === '1') return;
+          el.textContent = json.data.totals[k];
         });
       }
     } catch (err) { AS.toast('error', err.message); window.location.reload(); }

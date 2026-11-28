@@ -39,10 +39,90 @@ final class LocationService
             if (Helpers::setting('bd_locations_version', '') === '') {
                 Helpers::setSetting('bd_locations_version', '1', 'checkout');
             }
+            self::syncDefaults();
         } catch (\Throwable) {
             // Checkout must remain usable even if a read-only replica denies the write.
         }
         DeliveryZoneService::ensureDefaults();
+    }
+
+    /**
+     * Bundled seed revision. A store that already saved the hierarchy keeps its
+     * own edits, but missing records from a newer bundled seed (for example the
+     * Dhaka city thanas that make the “Dhaka city” delivery rate reachable) are
+     * merged in once, without any SQL migration and without touching stored
+     * names, order or is_active flags.
+     */
+    public static function seedRevision(): int
+    {
+        $defaults = self::defaultData();
+        return max(1, (int)($defaults['_seed_rev'] ?? $defaults['version'] ?? 1));
+    }
+
+    private static function syncDefaults(): void
+    {
+        $raw = Helpers::setting('bd_locations_json', '');
+        if ($raw === '') { return; } // nothing saved yet: the bundled seed is used directly
+        $stored = Helpers::decode($raw, []);
+        if (!is_array($stored) || empty($stored['divisions']) || !is_array($stored['divisions'])) { return; }
+        $revision = self::seedRevision();
+        if ((int)($stored['_seed_rev'] ?? 0) >= $revision) { return; }
+        $defaults = self::defaultData();
+        $merged = self::mergeMissing($stored, $defaults);
+        $merged['_seed_rev'] = $revision;
+        $merged['version'] = max((int)($stored['version'] ?? 1), (int)($defaults['version'] ?? 1));
+        Helpers::setSetting('bd_locations_json', Helpers::json($merged), 'checkout');
+        Helpers::setSetting('bd_locations_version', (string)$merged['version'], 'checkout');
+    }
+
+    /** Add only the bundled records the stored document does not have yet. */
+    private static function mergeMissing(array $stored, array $defaults): array
+    {
+        if (($stored['_attribution'] ?? '') === '') { $stored['_attribution'] = (string)($defaults['_attribution'] ?? ''); }
+        if (($stored['_license'] ?? '') === '') { $stored['_license'] = (string)($defaults['_license'] ?? ''); }
+        $divIndex = [];
+        foreach ($stored['divisions'] as $i => $d) {
+            if (!is_array($d)) { continue; }
+            $divIndex['id:' . (string)($d['id'] ?? '')] = $i;
+            $divIndex['name:' . self::name($d)] = $i;
+        }
+        foreach ((array)($defaults['divisions'] ?? []) as $dd) {
+            if (!is_array($dd)) { continue; }
+            $divPos = $divIndex['id:' . (string)($dd['id'] ?? '')] ?? $divIndex['name:' . self::name($dd)] ?? null;
+            if ($divPos === null || !is_array($stored['divisions'][$divPos] ?? null)) {
+                $stored['divisions'][] = $dd;
+                $divIndex['id:' . (string)($dd['id'] ?? '')] = array_key_last($stored['divisions']);
+                continue;
+            }
+            $distIndex = [];
+            foreach ((array)($stored['divisions'][$divPos]['districts'] ?? []) as $j => $x) {
+                if (!is_array($x)) { continue; }
+                $distIndex['id:' . (string)($x['id'] ?? '')] = $j;
+                $distIndex['name:' . self::name($x)] = $j;
+            }
+            foreach ((array)($dd['districts'] ?? []) as $dx) {
+                if (!is_array($dx)) { continue; }
+                $distPos = $distIndex['id:' . (string)($dx['id'] ?? '')] ?? $distIndex['name:' . self::name($dx)] ?? null;
+                if ($distPos === null || !is_array($stored['divisions'][$divPos]['districts'][$distPos] ?? null)) {
+                    $stored['divisions'][$divPos]['districts'][] = $dx;
+                    $distIndex['id:' . (string)($dx['id'] ?? '')] = array_key_last($stored['divisions'][$divPos]['districts']);
+                    continue;
+                }
+                $areaKeys = [];
+                foreach ((array)($stored['divisions'][$divPos]['districts'][$distPos]['areas'] ?? []) as $a) {
+                    if (!is_array($a)) { continue; }
+                    $areaKeys['id:' . (string)($a['id'] ?? '')] = true;
+                    $areaKeys['name:' . self::name($a)] = true;
+                }
+                foreach ((array)($dx['areas'] ?? []) as $da) {
+                    if (!is_array($da)) { continue; }
+                    if (isset($areaKeys['id:' . (string)($da['id'] ?? '')]) || isset($areaKeys['name:' . self::name($da)])) { continue; }
+                    $stored['divisions'][$divPos]['districts'][$distPos]['areas'][] = $da;
+                    $areaKeys['id:' . (string)($da['id'] ?? '')] = true;
+                }
+            }
+        }
+        return $stored;
     }
 
     public static function defaultCountry(): string
@@ -82,6 +162,7 @@ final class LocationService
         $out = [
             '_attribution' => is_array($data) ? (string)($data['_attribution'] ?? '') : '',
             '_license' => is_array($data) ? (string)($data['_license'] ?? '') : '',
+            '_seed_rev' => is_array($data) ? max(0, (int)($data['_seed_rev'] ?? 0)) : 0,
             'version' => max(1, (int)(is_array($data) ? ($data['version'] ?? 1) : 1)),
             'divisions' => [],
         ];

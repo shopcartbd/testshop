@@ -47,7 +47,26 @@ $annEnabled = Helpers::setting('announcement_enabled', '1') === '1';
 <meta property="og:url" content="<?= Helpers::e($canonical) ?>">
 <meta property="og:image" content="<?= Helpers::e((string)Config::get('app.url') . (string)$page['og_image']) ?>">
 <meta name="twitter:card" content="summary_large_image">
+<?php
+// Branding is optional: without an admin upload the bundled mark and icons are
+// used, so the storefront renders exactly as before.
+$brandLogoUrl = Helpers::safeMediaUrl((string)Helpers::setting('site_logo_url', ''));
+$brandFaviconUrl = Helpers::safeMediaUrl((string)Helpers::setting('favicon_url', ''));
+$brandFaviconType = str_ends_with(strtolower($brandFaviconUrl), '.png') ? 'image/png'
+    : (str_ends_with(strtolower($brandFaviconUrl), '.ico') ? 'image/x-icon'
+    : (str_ends_with(strtolower($brandFaviconUrl), '.svg') ? 'image/svg+xml' : 'image/png'));
+?>
+<?php if ($brandFaviconUrl !== ''): ?>
+<link rel="icon" href="<?= Helpers::e($brandFaviconUrl) ?>" type="<?= Helpers::e($brandFaviconType) ?>">
+<link rel="apple-touch-icon" href="<?= Helpers::e($brandFaviconUrl) ?>">
+<?php else: ?>
 <link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/img/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/assets/img/favicon-16.png" type="image/png" sizes="16x16">
+<link rel="apple-touch-icon" href="/assets/img/favicon-180.png" sizes="180x180">
+<?php endif; ?>
+<link rel="manifest" href="/assets/img/site.webmanifest">
+<meta name="theme-color" content="#14624f">
 <link rel="stylesheet" href="/assets/css/tokens.css">
 <link rel="stylesheet" href="/assets/css/app.css">
 <link rel="stylesheet" href="/assets/css/responsive.css">
@@ -65,8 +84,13 @@ $annEnabled = Helpers::setting('announcement_enabled', '1') === '1';
   <div class="container header-main">
     <button type="button" class="icon-btn menu-toggle" data-open-menu aria-label="Open menu" aria-expanded="false"><?= icon('menu',22) ?></button>
     <a class="brand" href="/" aria-label="<?= Helpers::e($appName) ?> home">
+<?php if ($brandLogoUrl !== ''): ?>
+      <img class="brand-logo" src="<?= Helpers::e($brandLogoUrl) ?>" alt="<?= Helpers::e($appName) ?>" height="32">
+      <span class="visually-hidden"><?= Helpers::e($appName) ?></span>
+<?php else: ?>
       <span class="brand-mark"><?= icon('layers',20) ?></span>
       <span><?= Helpers::e($appName) ?><small>Marketplace</small></span>
+<?php endif; ?>
     </a>
     <div class="search-wrap">
       <form class="search-form" action="/search" method="get" role="search" autocomplete="off">

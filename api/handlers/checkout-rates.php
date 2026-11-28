@@ -9,6 +9,7 @@ use AllStore\Services\CartService;
 use AllStore\Services\LocationService;
 use AllStore\Services\ShippingService;
 api_method('GET'); api_rate('checkout.rates', 120, 60);
+LocationService::ensureDefaults();
 $country = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', Request::str('country', '', 2)) ?: LocationService::defaultCountry(), 0, 2));
 $resolved = LocationService::resolve($country, Request::id('division_id'), Request::id('district_id'), Request::id('area_id'));
 if (!empty($resolved['errors'])) { Response::fail('Choose a valid delivery area.', $resolved['errors'], 422); }

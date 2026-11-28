@@ -58,6 +58,56 @@
     }
     return [null, null];
   };
+  const findAreaAny = (id) => {
+    for (const d of divisions()) {
+      for (const x of (d.districts || [])) {
+        const a = (x.areas || []).find((row) => row.id === id);
+        if (a) { return [d, x, a]; }
+      }
+    }
+    return [null, null, null];
+  };
+  const districtBelongsToDivision = (divisionId, districtId) => {
+    const d = findDivision(divisionId);
+    return Boolean(d && (d.districts || []).some((x) => x.id === districtId));
+  };
+  /* The page can be server-rendered with a district (or thana) that is not part
+     of the chosen division — a saved address, or a fast tap before the hierarchy
+     finished loading. Resolving the pair keeps the area select usable instead of
+     leaving the customer with an empty thana list. */
+  const healSelection = () => {
+    if (!hierarchy) return false;
+    if (area.value) {
+      const [ad, ax] = findAreaAny(area.value);
+      if (ad && ax) {
+        const areaId = area.value;
+        const divisionChanged = division.value !== ad.id;
+        const districtChanged = district.value !== ax.id;
+        if (divisionChanged) { division.value = ad.id; }
+        if (districtChanged) {
+          selected.district = ax.id;
+          updateDistricts();
+          district.value = ax.id;
+        }
+        if (divisionChanged || districtChanged) {
+          updateAreas(areaId);
+          area.value = areaId;
+          return true;
+        }
+      }
+    }
+    if (district.value && !districtBelongsToDivision(division.value, district.value)) {
+      const [d, x] = findDistrictAny(district.value);
+      if (d && x) {
+        division.value = d.id;
+        selected.district = x.id;
+        selected.area = area.value || '';
+        updateDistricts();
+        return true;
+      }
+    }
+    return false;
+  };
   const fill = (select, rows, placeholder, selectedId) => {
     select.textContent = '';
     select.appendChild(option('', placeholder));
@@ -114,11 +164,20 @@
       const [d] = findDistrictAny(currentDistrict);
       if (d) currentDivision = d.id;
     }
+    // The server renders every district in the select, so a fast tap can pick a
+    // district that belongs to another division. Follow that district's real
+    // division instead of dropping it and leaving the thana list empty.
+    if (currentDistrict && currentDivision && hierarchy
+        && !districtBelongsToDivision(currentDivision, currentDistrict)) {
+      const [d] = findDistrictAny(currentDistrict);
+      if (d) { currentDivision = d.id; }
+    }
     fill(division, divisions(), 'Select division / বিভাগ', currentDivision);
     selected.division = '';
     selected.district = currentDistrict;
     selected.area = currentArea;
     updateDistricts();
+    healSelection();
     const required = country.value === 'BD' && needsShipping();
     division.required = district.required = area.required = required;
   };
@@ -153,8 +212,8 @@
   };
   country.addEventListener('change', () => applyCountry(false));
   division.addEventListener('change', () => { if (!earlyChange()) { updateDistricts(); changed(); } });
-  district.addEventListener('change', () => { if (!earlyChange()) { updateAreas(); changed(); } });
-  area.addEventListener('change', () => { if (!earlyChange()) { autoFill(true); changed(); } });
+  district.addEventListener('change', () => { if (!earlyChange()) { healSelection(); updateAreas(); changed(); } });
+  area.addEventListener('change', () => { if (!earlyChange()) { if (healSelection()) { changed(); return; } autoFill(true); changed(); } });
   if (city) city.addEventListener('input', () => { delete city.dataset.bdAuto; });
   if (region) region.addEventListener('input', () => { delete region.dataset.bdAuto; });
   captureSelection();

@@ -79,6 +79,8 @@ final class Router
         '/admin/homepage' => 'admin/homepage.php',
         '/admin/reviews' => 'admin/reviews.php',
         '/admin/payments' => 'admin/payments.php',
+        '/admin/payment-gateway' => 'admin/payment-gateway.php',
+        '/admin/branding' => 'admin/branding.php',
         '/admin/transactions' => 'admin/transactions.php',
         '/admin/shipping' => 'admin/shipping.php',
         '/admin/locations' => 'admin/locations.php',

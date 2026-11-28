@@ -15,12 +15,27 @@
   let requestSeq = 0;
   let lastKey = '';
 
-  const renderTotals = (totals) => {
+  const renderTotals = (totals, shippingKnown) => {
     if (!totals) return;
     ['subtotal', 'discount', 'shipping', 'tax', 'total'].forEach((key) => {
       const el = document.querySelector('[data-checkout-total="' + key + '"]');
       if (el && totals[key] !== undefined) el.textContent = totals[key];
     });
+    // The delivery line shows a placeholder until the area is known; as soon as
+    // the server returns a real zone charge the placeholder and the hint go away.
+    const deliveryCell = document.querySelector('[data-checkout-total="shipping"]');
+    const hint = document.querySelector('[data-delivery-hint]');
+    if (shippingKnown) {
+      if (deliveryCell) delete deliveryCell.dataset.deliveryPending;
+      if (hint) hint.hidden = true;
+    } else {
+      if (deliveryCell) deliveryCell.dataset.deliveryPending = '1';
+      if (deliveryCell) deliveryCell.textContent = 'Select area';
+      if (hint) {
+        hint.hidden = false;
+        hint.textContent = 'Delivery charge is added after you choose division, district and thana — the total above is before delivery.';
+      }
+    }
   };
   const showZone = (zone) => {
     if (!zoneNote || !zone) return;
@@ -115,8 +130,10 @@
             ? 'Digital delivery — no courier needed'
             : 'Shipping method';
         }
+        const rates = Array.isArray(json.data.rates) ? json.data.rates : [];
+        const shippingKnown = rates.length > 0 && !(rates.length === 1 && rates[0].method === 'select_area');
         renderRates(json.data);
-        renderTotals(json.data.totals);
+        renderTotals(json.data.totals, shippingKnown);
       })
       .catch(() => {
         if (lastKey === key) lastKey = ''; // allow a retry after a network error

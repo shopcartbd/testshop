@@ -1,1 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#14624f"/><path d="M32 13 51 23 32 33 13 23 32 13Zm0 22 19-10v10L32 45 13 35V25l19 10Zm0 12 19-10v6L32 53 13 43v-6l19 10Z" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="AllStore">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0.25" y2="1">
+      <stop offset="0" stop-color="#1c8468"/>
+      <stop offset="0.6" stop-color="#14624f"/>
+      <stop offset="1" stop-color="#0b3c2f"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#g)"/>
+  <path d="M0 0h40L0 40z" fill="#ffffff" fill-opacity="0.10"/>
+  <g stroke="#0a3429" stroke-width="1.35" stroke-linejoin="round">
+    <path d="M32 13.8 50 24.4 32 35 14 24.4z" fill="#ffffff"/>
+    <path d="M32 28.9 50 39.5 32 50.1 14 39.5z" fill="#c4ebde"/>
+    <path d="M32 41.4 50 52 32 62.6 14 52z" fill="#8ac9b4"/>
+  </g>
+  <rect x="1.8" y="1.8" width="60.4" height="60.4" rx="13.2" fill="none" stroke="#ffffff" stroke-opacity="0.2" stroke-width="1.4"/>
+</svg>

@@ -185,6 +185,7 @@ function admin_crud_page(array $cfg): void
 
     admin_header(['title'=>(string)$cfg['title'],'subtitle'=>(string)($cfg['subtitle'] ?? ''),'active'=>(string)$cfg['active']]);
     if (!empty($cfg['notice'])) { echo '<div class="alert alert-info">'.icon('info',16).'<span>'.Helpers::e((string)$cfg['notice']).'</span></div>'; }
+    if (is_callable($cfg['before_table'] ?? null)) { echo (string)call_user_func($cfg['before_table']); }
 
     echo '<div class="admin-split"><div class="card" style="align-self:start"><div class="card-header"><h3>'.($row !== [] ? 'Edit ' : 'Add ').Helpers::e((string)($cfg['singular'] ?? 'record')).'</h3></div><div class="card-body">';
     echo '<form method="post" enctype="multipart/form-data">'.Session::csrfField().'<input type="hidden" name="id" value="'.Helpers::e($id).'"><input type="hidden" name="op" value="save"><div class="form-grid">';
@@ -232,6 +233,7 @@ function admin_crud_page(array $cfg): void
         $where[] = '(' . implode(' OR ', $parts) . ')';
     }
     if (!empty($cfg['soft_delete']) && in_array('deleted_at',$columns,true)) { $where[] = 'deleted_at IS NULL'; }
+    if (trim((string)($cfg['where'] ?? '')) !== '') { $where[] = (string)$cfg['where']; }
     $sql = (string)($cfg['sql'] ?? 'SELECT * FROM ' . $table);
     $page = Request::int('page',1,1,10000); $per = 20; $off = ($page-1)*$per;
     $rows = Database::all($sql . (str_contains(strtoupper($sql),' WHERE ') ? ' AND ' : ' WHERE ') . implode(' AND ',$where) . ' ORDER BY ' . (string)($cfg['order'] ?? 'created_at DESC') . " LIMIT $per OFFSET $off", $params);

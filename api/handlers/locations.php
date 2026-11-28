@@ -5,6 +5,7 @@ require_once __DIR__ . '/_common.php';
 use AllStore\Core\Response;
 use AllStore\Services\LocationService;
 api_method('GET'); api_rate('locations', 120, 60);
+LocationService::ensureDefaults();
 $data = LocationService::publicData();
 $data['counts'] = LocationService::counts();
 Response::ok('Bangladesh delivery areas loaded.', $data);

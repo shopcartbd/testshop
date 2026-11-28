@@ -44,9 +44,13 @@ echo '<form method="post" data-ajax-form="/api/cart/coupon" style="margin-bottom
 if ($totals['coupon']) { echo '<div class="alert alert-success">'.icon('check-circle',16).' Coupon <strong>'.Helpers::e($totals['coupon']).'</strong> applied. <form method="post" data-ajax-form="/api/cart/coupon" style="display:inline;margin:0">'.Session::csrfField().'<input type="hidden" name="remove" value="1"><button type="submit" aria-label="Remove coupon" style="border:0;background:none;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit">remove</button><span class="field-error" data-form-error></span></form></div>'; }
 echo '<div class="summary-line"><span>Subtotal ('.$totals['units'].' items)</span><strong data-summary="subtotal">'.Helpers::money($totals['subtotal_cents']).'</strong></div>';
 echo '<div class="summary-line"><span>Discount</span><strong data-summary="discount">'.((int)$totals['discount_cents'] > 0 ? '−' : '').Helpers::money($totals['discount_cents']).'</strong></div>';
-echo '<div class="summary-line"><span>Shipping ('.Helpers::e($totals['shipping']['name']).')</span><strong data-summary="shipping">'.Helpers::money($totals['shipping_cents']).'</strong></div>';
+$cartDeliveryPending = (string)($totals['shipping']['method'] ?? '') === 'select_area';
+echo '<div class="summary-line"><span>Delivery'.($cartDeliveryPending ? '' : ' ('.Helpers::e((string)$totals['shipping']['name']).')').'</span><strong data-summary="shipping"'.($cartDeliveryPending ? ' data-delivery-pending="1"' : '').'>'.($cartDeliveryPending ? 'Calculated at checkout' : Helpers::money($totals['shipping_cents'])).'</strong></div>';
 echo '<div class="summary-line"><span>Tax</span><strong data-summary="tax">'.Helpers::money($totals['tax_cents']).'</strong></div>';
 echo '<div class="summary-line total"><span>Total</span><strong data-summary="total">'.Helpers::money($totals['total_cents']).'</strong></div>';
+if ($cartDeliveryPending) {
+    echo '<p class="field-hint" style="margin-top:6px">Delivery charge is calculated from your division, district and thana at checkout — it is not included in the total above.'."</p>";
+}
 if ($totals['has_unavailable']) { echo alert_box('error','Remove unavailable items before continuing to checkout.'); }
 echo '<a class="btn btn-primary btn-block btn-lg" href="/checkout" style="margin-top:var(--sp-4)" '.($totals['has_unavailable']?'aria-disabled="true"':'').'>Continue to checkout '.icon('arrow-right',16).'</a>';
 echo '<a class="btn btn-ghost btn-block btn-sm" href="/shop" style="margin-top:8px">Continue shopping</a>';

@@ -16,22 +16,36 @@ use AllStore\Core\AppException;
  */
 final class PaymentService
 {
+    /**
+     * Checkout payment options. Cash on Delivery is controlled from
+     * /admin/payment-gateway; an online gateway appears only when the merchant
+     * enabled it there and every credential is present, so a customer can never
+     * pick a method that cannot take the money.
+     */
     public static function methods(): array
     {
         $out = [];
         if (Helpers::setting('cod_enabled', '1') === '1') {
             $out[] = ['id'=>'cod','name'=>'Cash on Delivery','description'=>'Pay when your order arrives.'];
         }
+        foreach (PaymentGatewayService::onlineMethods() as $method) {
+            $out[] = $method;
+        }
+        // Legacy env/config Stripe deployment keeps working without admin setup.
         if (self::stripeConfigured()) {
-            $out[] = ['id'=>'stripe','name'=>'Card / Online Payment','description'=>'Secure checkout with Stripe.'];
+            $has = false;
+            foreach ($out as $m) { if ($m['id'] === 'stripe') { $has = true; } }
+            if (!$has) {
+                $out[] = ['id'=>'stripe','name'=>'Card / Online Payment','description'=>'Secure checkout with Stripe.'];
+            }
         }
         return $out;
     }
+
     public static function stripeConfigured(): bool
     {
-        return (string)Config::get('payments.provider') === 'stripe'
-            && (string)Config::get('payments.secret') !== ''
-            && (string)Config::get('payments.webhook_secret') !== '';
+        $stripe = PaymentGatewayService::stripeConfig();
+        return trim((string)$stripe['secret']) !== '' && trim((string)$stripe['webhook_secret']) !== '';
     }
     public static function isAvailable(string $method): bool
     {
@@ -68,7 +82,7 @@ final class PaymentService
             $form['line_items[' . $i . '][price_data][product_data][name]'] = 'Shipping, tax & discounts';
         }
         [$status, $body, $err] = Http::request('POST', 'https://api.stripe.com/v1/checkout/sessions', [
-            'Authorization: Bearer ' . (string)Config::get('payments.secret'),
+            'Authorization: Bearer ' . (string)PaymentGatewayService::stripeConfig()['secret'],
             'Content-Type: application/x-www-form-urlencoded',
         ], http_build_query($form, '', '&', PHP_QUERY_RFC3986));
         $data = json_decode($body, true);
@@ -84,7 +98,7 @@ final class PaymentService
     /** Verify Stripe-Signature (t=...,v1=...). Returns decoded event or null. */
     public static function verifyWebhook(string $payload, string $header): ?array
     {
-        $secret = (string)Config::get('payments.webhook_secret');
+        $secret = (string)PaymentGatewayService::stripeConfig()['webhook_secret'];
         if ($secret === '' || $header === '') { return null; }
         $parts = [];
         foreach (explode(',', $header) as $piece) {
