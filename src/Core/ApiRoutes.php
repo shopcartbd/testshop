@@ -50,6 +50,7 @@ final class ApiRoutes
             'admin/sections' => 'admin-sections.php',
             'admin/settings' => 'admin-settings.php',
             'admin/inventory' => 'admin-inventory.php',
+            'admin/media/upload' => 'admin-media-upload.php',
             'admin/health' => 'health.php',
             'health' => 'health.php',
             'webhooks/stripe' => 'webhook-stripe.php',

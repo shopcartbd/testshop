@@ -10,9 +10,17 @@ use AllStore\Core\Logger;
 use AllStore\Core\AppException;
 
 /**
- * Uploads go to Supabase Storage via the server-side secret key. Random names,
- * MIME allowlist, content inspection and size limits are enforced in Security.
- * In local mode a non-executable storage/uploads directory is used instead.
+ * Media routing:
+ *   1. Public images (products, galleries, categories, brands, banners, logo,
+ *      favicon) go to Cloudinary when CLOUDINARY_* is set in the server
+ *      environment. Only the returned secure_url is stored in the database
+ *      (Supabase Postgres), so every page loads the image from Cloudinary.
+ *   2. Private files (digital downloads, support attachments) stay on Supabase
+ *      Storage behind the server-side secret key: those must never be public.
+ *   3. Without Cloudinary, public images fall back to Supabase Storage, and in
+ *      local development to a non-executable storage/uploads directory.
+ * Random names, MIME allowlist, content inspection and size limits are enforced
+ * in Security for every path. No credential is ever exposed to the browser.
  */
 final class UploadService
 {
@@ -21,8 +29,36 @@ final class UploadService
         return (string)Config::get('supabase.url') !== '' && (string)Config::get('supabase.secret') !== '';
     }
 
+    /** Where new public images will go right now. */
+    public static function provider(): string
+    {
+        if (CloudinaryService::configured()) { return 'cloudinary'; }
+        return self::configured() ? 'supabase' : (Config::get('app.env') === 'production' ? 'none' : 'local');
+    }
+
+    /** Credential-free status block for admin screens. */
+    public static function status(): array
+    {
+        $provider = self::provider();
+        return [
+            'provider' => $provider,
+            'cloudinary' => CloudinaryService::status(),
+            'label' => match ($provider) {
+                'cloudinary' => 'Cloudinary · ' . CloudinaryService::cloudName() . ' · /' . CloudinaryService::folder(),
+                'supabase' => 'Supabase Storage · ' . (string)Config::get('supabase.public_bucket'),
+                'local' => 'Local disk (development only)',
+                default => 'Not configured',
+            },
+            'ready' => $provider !== 'none',
+        ];
+    }
+
     public static function store(array $file, bool $private = false, bool $allowPdf = false): string
     {
+        // Public imagery → Cloudinary; only the secure URL is persisted by callers.
+        if (!$private && !$allowPdf && CloudinaryService::configured()) {
+            return CloudinaryService::uploadImage($file)['secure_url'];
+        }
         [$name, $mime] = Security::validateUpload($file, $allowPdf);
         $bucket = $private ? (string)Config::get('supabase.private_bucket') : (string)Config::get('supabase.public_bucket');
         $tmp = (string)$file['tmp_name'];
@@ -44,7 +80,7 @@ final class UploadService
                 : (string)Config::get('supabase.url') . '/storage/v1/object/public/' . rawurlencode($bucket) . '/' . $name;
         }
         if (Config::get('app.env') === 'production') {
-            throw new AppException('Storage is not configured (SUPABASE_URL / SUPABASE_SECRET_KEY).', 503);
+            throw new AppException('Image storage is not configured. Add CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET to the server environment (or SUPABASE_URL / SUPABASE_SECRET_KEY as a fallback).', 503);
         }
         // Local development fallback: never executable, no user-supplied filename.
         $dir = dirname(__DIR__, 2) . '/storage/uploads/' . dirname($name);

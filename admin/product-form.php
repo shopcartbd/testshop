@@ -129,7 +129,18 @@ echo '<div class="field"><label for="warranty">Warranty</label><input class="inp
 echo '<div class="field"><label for="supplier_name">Supplier</label><input class="input" id="supplier_name" name="supplier_name" value="'.$v('supplier_name').'"></div>';
 echo '<div class="field"><label for="video_url">Video URL (https)</label><input class="input" type="url" id="video_url" name="video_url" value="'.$v('video_url').'"></div>';
 echo '<div class="field span-2"><label for="gallery_urls">Gallery URLs (optional, one per line)</label><textarea class="textarea" id="gallery_urls" name="gallery_urls" style="min-height:80px">'.Helpers::e(implode("\n",$gallery)).'</textarea><span class="field-hint">Existing gallery URLs stay here. You can also upload several images at once below.</span></div>';
-echo '<div class="field span-2"><label for="gallery_files">Upload product images (select multiple)</label><input class="input" type="file" id="gallery_files" name="gallery_files[]" multiple accept="image/jpeg,image/png,image/webp,image/gif"><span class="field-hint">JPEG, PNG, WebP or GIF · up to 12 images · 5 MB each · first selected image becomes the main image.</span></div>';
+$mediaStatus = UploadService::status();
+$mediaHint = $mediaStatus['provider'] === 'cloudinary'
+    ? 'Uploads pass through the server API to Cloudinary (' . $mediaStatus['cloudinary']['cloud_name'] . ' · /' . $mediaStatus['cloudinary']['folder'] . '). Only the secure URL is saved in the database.'
+    : ($mediaStatus['ready']
+        ? 'Cloudinary is not configured, so images are stored in ' . $mediaStatus['label'] . '. Add CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in Vercel to use Cloudinary.'
+        : 'Image storage is not configured. Add CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in Vercel → Settings → Environment Variables.');
+echo '<div class="field span-2"><label for="gallery_files">Upload product images (select multiple)</label>'
+    . '<input class="input" type="file" id="gallery_files" name="gallery_files[]" multiple accept="image/jpeg,image/png,image/webp,image/gif"'
+    . ' data-media-upload="1" data-media-endpoint="' . Helpers::e(Helpers::url('/api/admin/media/upload')) . '"'
+    . ' data-media-target="#gallery_urls" data-media-preview="#gallery_upload_preview" data-media-csrf="' . Helpers::e(Session::csrfToken()) . '">'
+    . '<span class="field-hint">JPEG, PNG, WebP or GIF · up to 12 images · 5 MB each · ' . Helpers::e($mediaHint) . '</span></div>';
+echo '<div class="field span-2" id="gallery_upload_preview" data-media-preview-box hidden></div>';
 if ($gallery !== []) {
     echo '<div class="field span-2"><label>Current gallery</label><div style="display:flex;flex-wrap:wrap;gap:8px">';
     foreach ($gallery as $g) { echo '<img src="'.Helpers::e($g).'" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--c-border)">'; }

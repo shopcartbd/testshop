@@ -5,6 +5,7 @@ use AllStore\Core\Auth;
 use AllStore\Core\Helpers;
 use AllStore\Services\LocationService;
 use AllStore\Services\DeliveryZoneService;
+use AllStore\Services\UploadService;
 require_once APP_ROOT . '/includes/admin-crud.php';
 Auth::requireAdmin('dashboard.view');
 LocationService::ensureDefaults();
@@ -41,6 +42,19 @@ else {
     echo '<div class="toggle-row" style="margin-top:12px"><span>Free over</span><span class="badge badge-neutral">'.Helpers::e($delivery['free_over_label']).((int)$delivery['free_over_cents']===0?' · off':'').'</span></div>';
     echo '<div class="toggle-row"><span>Simple checkout</span><span class="badge '.($delivery['simple_checkout']?'badge-brand':'badge-neutral').'">'.($delivery['simple_checkout']?'On':'Off').'</span></div>';
 }
+echo '</div><div class="card card-pad"><h3 style="margin-bottom:12px">Image storage</h3>';
+$media = UploadService::status();
+if ($media['provider'] === 'cloudinary') {
+    echo '<div class="alert alert-success">'.icon('check',16).'<span>Product images upload to Cloudinary ('.Helpers::e($media['cloudinary']['cloud_name']).' · /'.Helpers::e($media['cloudinary']['folder']).'). Only the secure URL is stored in the database.</span></div>';
+} elseif ($media['ready']) {
+    echo '<div class="alert alert-warning">'.icon('alert',16).'<span>Cloudinary is not configured, so images fall back to '.Helpers::e($media['label']).'. Add CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in Vercel → Settings → Environment Variables.</span></div>';
+} else {
+    echo '<div class="alert alert-warning">'.icon('alert',16).'<span>Image storage is not configured. Add CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in Vercel → Settings → Environment Variables, then redeploy.</span></div>';
+}
+echo '<div class="toggle-row"><span>Public images</span><span class="badge badge-neutral">'.Helpers::e($media['label']).'</span></div>';
+echo '<div class="toggle-row"><span>Private files</span><span class="badge badge-neutral">'.(UploadService::configured()?'Supabase Storage':'Not configured').'</span></div>';
+echo '<div class="toggle-row"><span>Admin upload route</span><span class="badge badge-neutral">POST /api/admin/media/upload</span></div>';
+echo '<p class="text-muted" style="font-size:12px;margin-top:10px">Credentials live only in the server environment. They are never sent to the browser or shown in this panel.</p>';
 echo '</div><div class="card card-pad"><h3 style="margin-bottom:12px">Where to find things</h3>';
 foreach ([
     'Overview'=>'Dashboard · Reports · Notifications',

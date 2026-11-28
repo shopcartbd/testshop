@@ -276,6 +276,76 @@ check(
     and "UploadService::store" in read("admin/branding.php"),
 )
 
+check(
+    "Cloudinary service signs uploads server-side and validates images",
+    "ksort($clean" in read("src/Services/CloudinaryService.php")
+    and "sha1(implode('&', $pairs) . $secret)" in read("src/Services/CloudinaryService.php")
+    and "Security::validateUpload" in read("src/Services/CloudinaryService.php")
+    and "CLOUDINARY_CLOUD_NAME" in read("src/Services/CloudinaryService.php"),
+)
+check(
+    "Cloudinary credentials are read from the environment only",
+    all(k in read("src/Core/Config.php") for k in ("CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"))
+    and "'cloudinary' => static::cloudinary()" in read("src/Core/Config.php"),
+)
+check(
+    "Public image uploads route to Cloudinary, private files stay on Supabase",
+    "CloudinaryService::uploadImage($file)['secure_url']" in read("src/Services/UploadService.php")
+    and "!$private && !$allowPdf && CloudinaryService::configured()" in read("src/Services/UploadService.php"),
+)
+check(
+    "Admin media upload API route is registered and admin-protected",
+    "'admin/media/upload' => 'admin-media-upload.php'" in read("src/Core/ApiRoutes.php")
+    and "api_require_admin('products.manage')" in read("api/handlers/admin-media-upload.php")
+    and "api_csrf()" in read("api/handlers/admin-media-upload.php")
+    and "Response::ok(" in read("api/handlers/admin-media-upload.php"),
+)
+check(
+    "The upload route never echoes a credential",
+    "CLOUDINARY_API_SECRET" not in read("api/handlers/admin-media-upload.php").split("Response::ok")[-1]
+    and "apiSecret()" not in read("api/handlers/admin-media-upload.php"),
+)
+check(
+    "Product form uploads through the server API and only saves the URL",
+    'data-media-upload="1"' in read("admin/product-form.php")
+    and "/api/admin/media/upload" in read("admin/product-form.php")
+    and "name=\"gallery_urls\"" in read("admin/product-form.php"),
+)
+check(
+    "Admin JS posts the file to the media route before saving",
+    "data-media-upload" in read("assets/js/admin.js")
+    and "FormData()" in read("assets/js/admin.js")
+    and "'X-CSRF-TOKEN'" in read("assets/js/admin.js"),
+)
+check(
+    "Generic admin image fields also go through the media route",
+    "data-media-upload" in read("includes/admin-crud.php")
+    and "/api/admin/media/upload" in read("includes/admin-crud.php"),
+)
+check(
+    "Setup guide reports the active image provider without secrets",
+    "Image storage" in read("admin/setup-guide.php")
+    and "UploadService::status()" in read("admin/setup-guide.php"),
+)
+check(
+    "Cloudinary variables are documented for Vercel",
+    all(k in read("docs/ENVIRONMENT_VARIABLES.md") for k in ("CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"))
+    and all(k in read(".env.example") for k in ("CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"))
+    and (ROOT / "docs/CLOUDINARY_MEDIA.md").is_file(),
+)
+cloudinary_secret_re = re.compile(r"(?:cloudinary://[A-Za-z0-9_\-]{6,}:|api_secret\s*=\s*['\"][A-Za-z0-9_\-]{8,})")
+secret_hits = []
+for path in list(ROOT.rglob("*.php")) + list(ROOT.rglob("*.js")) + list(ROOT.rglob("*.md")) + list(ROOT.rglob("*.example")):
+    if any(part in {".git", "node_modules", ".venv", "__pycache__", "vendor"} for part in path.parts):
+        continue
+    try:
+        text = path.read_text(errors="ignore")
+    except OSError:
+        continue
+    if cloudinary_secret_re.search(text):
+        secret_hits.append(str(path.relative_to(ROOT)))
+check("No Cloudinary secret is hard-coded in the source tree", not secret_hits, ", ".join(secret_hits[:3]))
+
 # No exact token literal may enter this release either.
 token_re = re.compile(rb"(?:ghp_[A-Za-z0-9]{20,}|vcp_[A-Za-z0-9]{20,})")
 token_hits = []

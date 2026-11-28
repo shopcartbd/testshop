@@ -205,7 +205,12 @@ function admin_crud_page(array $cfg): void
             echo '</select>';
         } elseif ($type === 'image') {
             echo '<input class="input" type="url" id="f_'.Helpers::e($key).'" name="'.Helpers::e($key).'" value="'.Helpers::e($v).'" placeholder="/assets/img/... or https://...">';
-            echo '<input class="input" type="file" name="'.Helpers::e($key).'_file" accept="image/jpeg,image/png,image/webp" style="margin-top:8px">';
+            // Uploads go through the server API route first (Cloudinary when the
+            // CLOUDINARY_* environment variables exist); the field only ever
+            // receives the resulting secure URL.
+            echo '<input class="input" type="file" name="'.Helpers::e($key).'_file" accept="image/jpeg,image/png,image/webp" style="margin-top:8px"'
+                . ' data-media-upload="1" data-media-endpoint="'.Helpers::e(Helpers::url('/api/admin/media/upload')).'"'
+                . ' data-media-target="#f_'.Helpers::e($key).'" data-media-csrf="'.Helpers::e(Session::csrfToken()).'">';
             if ($v !== '') { $url = UploadService::url($v); echo '<img src="'.Helpers::e($url !== '' ? $url : $v).'" alt="" style="width:72px;height:72px;object-fit:cover;border-radius:8px;margin-top:8px">'; }
         } elseif ($type === 'password_hash') {
             echo '<input class="input" type="password" id="f_'.Helpers::e($key).'" name="password" autocomplete="new-password" minlength="10"'.($row===[]?' required':'').'><span class="field-hint">'.($row!==[]?'Leave blank to keep the current password.':'At least 10 characters with a letter and a number.').'</span>';

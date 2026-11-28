@@ -66,6 +66,7 @@ final class Config
                 'public_bucket' => Env::get('SUPABASE_STORAGE_BUCKET', 'product-images') ?: 'product-images',
                 'private_bucket' => Env::get('SUPABASE_PRIVATE_BUCKET', 'private-documents') ?: 'private-documents',
             ],
+            'cloudinary' => static::cloudinary(),
             'mail' => [
                 'url' => Env::get('MAIL_PROVIDER_URL', '') ?: '',
                 'key' => Env::get('MAIL_API_KEY', '') ?: '',
@@ -90,6 +91,35 @@ final class Config
                 throw new AppException('APP_KEY is required in production.', 500);
             }
         }
+    }
+
+    /**
+     * Cloudinary credentials (server-side only). Discrete variables win; a
+     * single CLOUDINARY_URL=cloudinary://key:secret@cloud is also accepted.
+     * Values are never rendered or logged.
+     */
+    private static function cloudinary(): array
+    {
+        $cloud = trim((string)(Env::get('CLOUDINARY_CLOUD_NAME', '') ?: ''));
+        $key = trim((string)(Env::get('CLOUDINARY_API_KEY', '') ?: ''));
+        $secret = trim((string)(Env::get('CLOUDINARY_API_SECRET', '') ?: ''));
+        $url = trim((string)(Env::get('CLOUDINARY_URL', '') ?: ''));
+        if (($cloud === '' || $key === '' || $secret === '') && $url !== ''
+            && preg_match('#^cloudinary://([^:]+):([^@]+)@([A-Za-z0-9_\-]+)$#', $url, $m) === 1) {
+            $key = $key !== '' ? $key : rawurldecode($m[1]);
+            $secret = $secret !== '' ? $secret : rawurldecode($m[2]);
+            $cloud = $cloud !== '' ? $cloud : $m[3];
+        }
+        $folder = preg_replace('#[^A-Za-z0-9_\-/]#', '', (string)(Env::get('CLOUDINARY_UPLOAD_FOLDER', 'allstore/products') ?: 'allstore/products')) ?? '';
+        return [
+            'cloud' => $cloud,
+            'key' => $key,
+            'secret' => $secret,
+            'folder' => trim($folder, '/') !== '' ? trim($folder, '/') : 'allstore/products',
+            'base' => rtrim((string)(Env::get('CLOUDINARY_API_BASE', 'https://api.cloudinary.com/v1_1') ?: 'https://api.cloudinary.com/v1_1'), '/'),
+            'configured' => $cloud !== '' && $key !== '' && $secret !== '',
+            'source' => $url !== '' && ($cloud === '' || $key === '' || $secret === '') ? 'CLOUDINARY_URL' : 'discrete',
+        ];
     }
 
     /** Name of the env var that supplied the DSN; diagnostics only. */

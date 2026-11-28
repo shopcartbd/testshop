@@ -103,6 +103,61 @@
     reader.readAsText(file.slice(0, 4096));
   });
 
+  /* --------------------------------------------------- media upload (Cloudinary) */
+  qsa('[data-media-upload]').forEach(input => {
+    input.addEventListener('change', async () => {
+      const files = Array.from(input.files || []);
+      if (!files.length) return;
+      const endpoint = input.dataset.mediaEndpoint || '/api/admin/media/upload';
+      const target = input.dataset.mediaTarget ? qs(input.dataset.mediaTarget) : null;
+      const box = input.dataset.mediaPreview ? qs(input.dataset.mediaPreview) : null;
+      const token = input.dataset.mediaCsrf || document.body.dataset.csrf || '';
+      const form = new FormData();
+      files.slice(0, 12).forEach(f => form.append('files[]', f, f.name));
+      if (box) {
+        box.hidden = false;
+        box.innerHTML = '<span class="field-hint">Uploading ' + files.length + ' image(s)…</span>';
+      }
+      input.disabled = true;
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          body: form,
+          headers: { 'X-CSRF-TOKEN': token, 'Accept': 'application/json' },
+          credentials: 'same-origin'
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data || data.success !== true) {
+          throw new Error((data && data.message) || 'Upload failed.');
+        }
+        const images = (data.data && data.data.images) || [];
+        if (!images.length) throw new Error('No image URL was returned.');
+        if (target) {
+          const existing = target.value.trim();
+          const added = images.map(i => i.url).join('\n');
+          target.value = existing ? existing + '\n' + added : added;
+          target.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        if (box) {
+          box.innerHTML = '<span class="field-hint">Uploaded to ' + (data.data.provider === 'cloudinary' ? 'Cloudinary' : data.data.provider) + ' — only the secure URL is saved.</span>' +
+            '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">' + images.map(i =>
+              '<img src="' + i.url + '" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--c-border)">').join('') + '</div>';
+        }
+        // Uploaded through the API already: clear the picker so the form POST
+        // does not upload the same file a second time.
+        input.value = '';
+        window.AllStore?.toast?.('success', images.length + ' image(s) uploaded.');
+      } catch (err) {
+        // Leave the files selected: the normal form submit still uploads them
+        // server-side, so the admin is never blocked.
+        if (box) box.innerHTML = '<span class="field-hint" style="color:var(--c-danger,#b42318)">' + (err && err.message ? err.message : 'Upload failed.') + '</span>';
+        window.AllStore?.toast?.('error', err && err.message ? err.message : 'Upload failed.');
+      } finally {
+        input.disabled = false;
+      }
+    });
+  });
+
   /* ------------------------------------------------- payment gateway fields */
   const gatewaySelect = qs('[data-gateway-provider]');
   if (gatewaySelect) {

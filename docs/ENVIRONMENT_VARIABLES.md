@@ -36,6 +36,32 @@ All variables are read by `src/Core/Env.php` and mapped in `src/Core/Config.php`
 
 **Vercel / Supabase alias support (added 2026-11-25):** `Config.php` also accepts `SUPABASE_DB_URL`, `POSTGRES_URL` and `POSTGRES_URL_NON_POOLING` as `DATABASE_URL`; `VERCEL_ENV=production` as `APP_ENV`; `VERCEL_URL` as an `APP_URL` fallback when `APP_URL` is missing/localhost; and it derives `SUPABASE_URL` from a Supabase DB URI when no explicit URL is supplied. `SESSION_DRIVER` is a common platform variable but is ignored — sessions are always DB-backed. These are aliases/fallbacks, not a replacement for a real PostgreSQL DSN.
 
+## Cloudinary (product, gallery and admin images)
+
+Public images never touch the browser's credentials: the admin panel posts the
+file to the server route `POST /api/admin/media/upload`, the server signs the
+upload with the secret and forwards it to Cloudinary, and only the returned
+`secure_url` is written to `product_images.url` (Supabase Postgres). Every page
+then loads the picture straight from Cloudinary.
+
+| Variable | Required | Default | Notes |
+|---|---:|---|---|
+| `CLOUDINARY_CLOUD_NAME` | Yes for Cloudinary | — | Cloud name from the Cloudinary dashboard. Safe to display, still server-side only. |
+| `CLOUDINARY_API_KEY` | Yes for Cloudinary | — | API key. Never rendered into HTML or JSON. |
+| `CLOUDINARY_API_SECRET` | **Yes** | — | Used to sign uploads (`sha1`) and delete assets. Never leaves the server. |
+| `CLOUDINARY_UPLOAD_FOLDER` | No | `allstore/products` | Folder prefix for new uploads. |
+| `CLOUDINARY_URL` | Alternative | — | `cloudinary://key:secret@cloud`; used only when a discrete value is missing. |
+| `CLOUDINARY_API_BASE` | No | `https://api.cloudinary.com/v1_1` | Override for an on-prem/test endpoint. |
+
+Behaviour without these variables: public images fall back to Supabase Storage
+(`SUPABASE_URL` + `SUPABASE_SECRET_KEY`), and in local development to
+`storage/uploads/`. Private files (digital downloads, support attachments)
+always stay on Supabase Storage, never on Cloudinary.
+
+After adding or changing the variables in Vercel, redeploy so the container
+picks them up (`/admin/setup-guide` shows which provider is active and which
+variable names are missing — never their values).
+
 ## Supabase Storage and optional REST
 
 | Variable | Required | Notes |
