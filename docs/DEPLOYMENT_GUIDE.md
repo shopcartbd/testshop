@@ -163,3 +163,29 @@ Fixes applied:
 - `tests/validate_vercel.php` now has **34 checks**; `tests/validate.php` **607 checks**; local HTTP smoke remained **71/0**.
 
 Live redeploy verification and the final public URL are recorded in `/home/user/VERCEL_DEPLOY_RESULT.md`. The only attached project domain is `allstorbd.vercel.app`; a different/custom hostname must be added in Vercel → Project → Settings → Domains before it will route.
+
+### Container build fails: "Pushing vcr.vercel.com/…/dockerfile:<sha> was denied"
+
+Vercel's Container Registry (VCR) keeps one repository per project. If it gets
+into a bad state the image push is rejected and every deployment fails with
+`ERROR` while `vercel.json` and the source are fine (the build itself succeeds).
+
+Fix (checked against this project on 2026-11-28):
+
+```bash
+# 1. inspect — the repository may exist but reject pushes, or be empty
+curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
+  "https://api.vercel.com/v1/vcr/repository?teamId=<team>&projectId=<project>"
+curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
+  "https://api.vercel.com/v1/vcr/repository/dockerfile/images?teamId=<team>"
+
+# 2. delete the stuck repository when it holds no image that production needs
+curl -s -X DELETE -H "Authorization: Bearer $VERCEL_TOKEN" \
+  "https://api.vercel.com/v1/vcr/repository/dockerfile?teamId=<team>&projectId=<project>"
+
+# 3. redeploy the same commit; Vercel recreates the repository on the first push
+```
+
+Failed deployments can also be deleted (`DELETE /v13/deployments/{id}`), but the
+registry state, not the deployment list, is what blocks the push.
+
